@@ -53,21 +53,50 @@ from app.services import media_service
 logger = logging.getLogger("elato.hero_video")
 
 
+def _current_rss_kb() -> int | None:
+    """Current process RSS in kB, read straight from `/proc/self/status`
+    (the kernel's own live figure — what the OOM killer actually acts on),
+    not `resource.getrusage().ru_maxrss` (a monotonic high-water mark that
+    only ever grows and can't show memory being released). Linux-only by
+    construction (`/proc` doesn't exist elsewhere); returns None off Linux —
+    e.g. local Windows/macOS dev — so instrumentation degrades silently
+    instead of breaking non-production runs. Render's containers are Linux,
+    so this is live data in the environment that actually OOMs."""
+    try:
+        with open("/proc/self/status", "rb") as f:
+            for line in f:
+                if line.startswith(b"VmRSS:"):
+                    return int(line.split()[1])  # kB, per /proc(5)
+    except (OSError, IndexError, ValueError):
+        return None
+    return None
+
+
 @contextmanager
 def _timed_step(step: str, slot: str) -> Iterator[None]:
     """Logs how long one pipeline step took, so a slow upload can be
     diagnosed from the logs alone (which step, not just "it was slow").
-    Uses try/finally (not try/except) so the duration is logged whether the
-    step succeeds *or* raises — a step that fails partway through is exactly
-    the case worth timing, not one to skip. Never alters control flow: any
-    exception raised inside the `with` block propagates unchanged after the
-    duration is logged."""
+    Also logs process RSS immediately before and after the step, and the
+    delta between them, so a memory spike can be attributed to a specific
+    step from production logs alone — this is what the Render OOM
+    investigation (see `_process_and_upload_hero_video`'s docstring) needed
+    but didn't have. Uses try/finally (not try/except) so both duration and
+    RSS are logged whether the step succeeds *or* raises — a step that fails
+    partway through is exactly the case worth measuring, not one to skip.
+    Never alters control flow: any exception raised inside the `with` block
+    propagates unchanged after logging."""
     start = time.perf_counter()
+    rss_before = _current_rss_kb()
     try:
         yield
     finally:
         duration_ms = (time.perf_counter() - start) * 1000
-        logger.info(f"[hero_video_upload] slot={slot} step={step} duration_ms={duration_ms:.1f}")
+        rss_after = _current_rss_kb()
+        rss_delta = rss_after - rss_before if (rss_before is not None and rss_after is not None) else None
+        logger.info(
+            f"[hero_video_upload] slot={slot} step={step} duration_ms={duration_ms:.1f} "
+            f"rss_before_kb={rss_before} rss_after_kb={rss_after} rss_delta_kb={rss_delta}"
+        )
 
 
 VIDEO_BUCKET = "hero-videos"
@@ -105,6 +134,18 @@ _TRANSCODE_TIMEOUT_SECONDS = 180
 # get meaningful scheduling time on — paying the memory cost of parallelism
 # the container can't actually use. 2 keeps that bounded while still being
 # well within the 180s timeout for a <=20s clip.
+#
+# Applied on BOTH sides of the pipeline: an input-context `-threads` (before
+# `-i`, bounds the *decoder*) and an output-context `-threads` (after `-c:v`,
+# bounds the *encoder*) are two independent ffmpeg option groups — setting
+# one does not set the other. A prior version of this constant only bounded
+# the encoder; the decoder was left on ffmpeg's auto-detected thread count,
+# and for admin-uploaded phone footage (source resolution up to
+# `_MAX_DIMENSION`, i.e. up to 4K) frame-threaded decoding allocates one full
+# decoded-frame buffer per thread — at 4K that's ~12MB/frame, so an
+# auto-detected 8-16 threads is another 100-200MB the encoder-side fix never
+# touched. That gap is the leading suspect for the Render OOM this constant's
+# other half was already fixed for.
 _ENCODE_THREADS = 2
 
 
@@ -117,7 +158,7 @@ class VideoProbe:
 
 
 class VideoProcessor(Protocol):
-    def probe(self, path: str) -> VideoProbe: ...
+    def probe(self, path: str, *, include_poster: bool = True) -> VideoProbe: ...
 
 
 class PyAvProbe:
@@ -128,9 +169,18 @@ class PyAvProbe:
     installed, unsupported container, corrupt file) degrades to an empty
     probe rather than blocking the upload — duration/dimension checks are
     simply skipped, and the admin can upload a poster image manually via the
-    fallback endpoint."""
+    fallback endpoint.
 
-    def probe(self, path: str) -> VideoProbe:
+    `include_poster` lets a caller skip the decode-a-frame-and-JPEG-encode-it
+    step when only metadata (width/height/duration) is needed. The pipeline
+    probes twice — once on the *source* upload for validation, once on the
+    *compressed* output for the poster that's actually stored — and only the
+    second call's poster is ever used, so decoding one on the source call
+    too was pure waste: on a large admin-uploaded source (up to
+    `_MAX_DIMENSION`, i.e. up to 4K) that's a full-resolution frame decode +
+    JPEG encode thrown away every single upload."""
+
+    def probe(self, path: str, *, include_poster: bool = True) -> VideoProbe:
         try:
             import av
         except ImportError:
@@ -152,12 +202,13 @@ class PyAvProbe:
                     duration_seconds = container.duration / 1_000_000
 
                 poster_jpeg = None
-                try:
-                    for frame in container.decode(stream):
-                        poster_jpeg = _frame_to_jpeg(frame)
-                        break
-                except Exception:
-                    poster_jpeg = None
+                if include_poster:
+                    try:
+                        for frame in container.decode(stream):
+                            poster_jpeg = _frame_to_jpeg(frame)
+                            break
+                    except Exception:
+                        poster_jpeg = None
 
                 return VideoProbe(
                     width=width, height=height, duration_seconds=duration_seconds, poster_jpeg=poster_jpeg
@@ -218,15 +269,21 @@ def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
     - `-crf` is quality-targeted rather than a fixed bitrate, so a visually
       simple clip lands well under the cap instead of always spending the
       same bits.
-    - `-threads` is fixed and small (see `_ENCODE_THREADS`) — bounds libx264's
-      own peak memory on a constrained container, independent of anything on
-      the Python side.
+    - `-threads` is fixed and small (see `_ENCODE_THREADS`) and is set
+      *twice*: once before `-i` (an input-context option, bounds the
+      decoder reading `source_path`) and once after `-c:v` (an
+      output-context option, bounds the libx264 encoder). These are two
+      independent ffmpeg option groups — setting only the output one, as an
+      earlier version of this function did, leaves the decoder free to
+      auto-detect the host's full core count and pay for that many
+      full-resolution decoded-frame buffers. `-filter_threads` gets the same
+      cap for the same reason, for the `scale` filter in between.
     - `+faststart` moves the MP4 moov atom to the front of the file so a
       browser can begin playback after downloading the first chunk instead
       of needing the full file first.
-    - `-loglevel error` keeps ffmpeg's stderr (captured by `subprocess.run`
-      into parent-process memory) to just real errors, not the default
-      per-frame progress chatter.
+    - `-loglevel error` keeps ffmpeg's stderr to just real errors, not the
+      default per-frame progress chatter — it's captured into parent-process
+      memory below, so this also bounds how much that capture can hold.
     """
     profile = _COMPRESSION_PROFILES.get(slot, _COMPRESSION_PROFILES["desktop"])
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -241,20 +298,40 @@ def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
         ffmpeg_exe,
         "-y",
         "-loglevel", "error",
+        "-threads", str(_ENCODE_THREADS),  # input-context: bounds the decoder for -i below
+        "-filter_threads", str(_ENCODE_THREADS),
         "-i", str(source_path),
         "-an",
         "-vf", scale,
         "-c:v", "libx264",
         "-preset", _ENCODE_PRESET,
         "-crf", str(profile["crf"]),
-        "-threads", str(_ENCODE_THREADS),
+        "-threads", str(_ENCODE_THREADS),  # output-context: bounds the libx264 encoder
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         str(out_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=_TRANSCODE_TIMEOUT_SECONDS)
-    if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
-        raise VideoTranscodeError(result.stderr)
+
+    input_size_bytes = source_path.stat().st_size
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    logger.info(
+        f"[hero_video_upload] slot={slot} step=ffmpeg_compression ffmpeg_pid={proc.pid} "
+        f"input_size_bytes={input_size_bytes}"
+    )
+    try:
+        _stdout, stderr = proc.communicate(timeout=_TRANSCODE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise
+
+    output_size_bytes = out_path.stat().st_size if out_path.exists() else 0
+    logger.info(
+        f"[hero_video_upload] slot={slot} step=ffmpeg_compression ffmpeg_pid={proc.pid} "
+        f"ffmpeg_exit_code={proc.returncode} output_size_bytes={output_size_bytes}"
+    )
+    if proc.returncode != 0 or not out_path.exists() or output_size_bytes == 0:
+        raise VideoTranscodeError(stderr)
 
 
 def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
@@ -331,7 +408,10 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
             _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before spending CPU on a transcode
 
             with _timed_step("metadata_probe_source", slot):
-                source_probe = _processor.probe(str(source_path))
+                # No poster needed here — only `final_probe`'s (below, on the
+                # *compressed* output) is ever stored, so skip decoding one
+                # from the source and throwing it away.
+                source_probe = _processor.probe(str(source_path), include_poster=False)
             if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
                 raise AppError(
                     code="video_too_long",
@@ -437,8 +517,19 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
 
             return row
     finally:
+        # By this point `TemporaryDirectory.__exit__` has already run (it
+        # wraps everything above, including the `return`), so source_path/
+        # out_path and their containing tmp_dir are already deleted from
+        # disk — this log line is confirmation of that, not a separate
+        # cleanup step. The RSS reading here is what to compare against each
+        # step's own rss_after (logged by `_timed_step`) to see whether
+        # memory was actually released once ffmpeg exited and the temp files
+        # were removed, or whether it's still held by the process.
         total_ms = (time.perf_counter() - request_start) * 1000
-        logger.info(f"[hero_video_upload] slot={slot} step=total_request duration_ms={total_ms:.1f}")
+        logger.info(
+            f"[hero_video_upload] slot={slot} step=total_request duration_ms={total_ms:.1f} "
+            f"tmp_dir_cleaned_up=true rss_after_cleanup_kb={_current_rss_kb()}"
+        )
 
 
 async def upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
