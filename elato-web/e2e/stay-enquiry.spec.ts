@@ -19,7 +19,9 @@ test.describe('Stay booking enquiry', () => {
     await page.goto('/elato-stay')
 
     await page.getByLabel('Name').fill('Farida Sheikh')
-    await page.getByLabel('Phone').fill('+91 98765 43210')
+    // Phone is the bare national-number input — country code is a separate
+    // "Country code" select (defaults to India/+91), not part of this field.
+    await page.getByLabel('Phone').fill('98765 43210')
     await page.getByLabel('Email').fill('farida@example.com')
 
     const today = new Date()
@@ -73,7 +75,10 @@ test.describe('Stay booking enquiry', () => {
     await page.getByRole('button', { name: 'Enquire on WhatsApp' }).click()
 
     await expect(page.getByText('Enter 2–60 letters, spaces or hyphens only.')).toBeVisible()
-    await expect(page.getByText(/Enter a valid \+91 or \+971 number/)).toBeVisible()
+    // Default country is India (+91) — validatePhoneForCountry now returns a
+    // per-country message with an example number, not the old combined
+    // "+91 or +971" string.
+    await expect(page.getByText(/Enter a valid \+91 number/)).toBeVisible()
     await expect(page.getByText('Enter a valid email address.')).toBeVisible()
     // Never reaches the success state.
     await expect(page.getByRole('status')).toHaveCount(0)

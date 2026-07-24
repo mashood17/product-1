@@ -138,6 +138,15 @@ jobs:
     defaults:
       run:
         working-directory: elato-web
+    env:
+      # The Playwright webServer runs `npm run dev` with no elato-web/.env
+      # present (gitignored, not checked out in CI) — without this, Vite
+      # warns "%VITE_API_BASE_URL% is not defined in index.html" on every
+      # run. Every backend call this suite exercises is mocked at the network
+      # layer (see e2e/fixtures/api-mocks.ts), so the exact value doesn't
+      # matter functionally — this just needs to be non-empty, and matches
+      # the same default elato-web/.env.example documents for local dev.
+      VITE_API_BASE_URL: http://localhost:8000
     steps:
       - uses: actions/checkout@v4
 
