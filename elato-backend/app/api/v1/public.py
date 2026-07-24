@@ -84,7 +84,9 @@ def register_for_offer(payload: OfferRegistrationCreate):
 
 
 @router.get("/categories", response_model=list[CategoryOut])
-def list_categories():
+def list_categories(response: Response):
+    # Admin-managed, changes rarely — same cadence as site-content/gallery below.
+    response.headers["Cache-Control"] = "public, max-age=300"
     # Each row carries an embedded media(storage_path, bucket) join — resolve it
     # to the optimized public URL so the Celebré frontend gets a usable image.
     out = []
@@ -95,7 +97,10 @@ def list_categories():
 
 
 @router.get("/menu-items", response_model=list[MenuItemOut])
-def list_menu_items(category_id: str | None = None, is_available: bool | None = None):
+def list_menu_items(response: Response, category_id: str | None = None, is_available: bool | None = None):
+    # Shorter than categories/gallery — availability toggles are the one
+    # thing here an admin would plausibly want to reflect within a minute.
+    response.headers["Cache-Control"] = "public, max-age=60"
     out = []
     for row in menu_item_repository.list_public(category_id, is_available):
         image_url = media_service.pop_embedded_media_url(row)
@@ -104,7 +109,9 @@ def list_menu_items(category_id: str | None = None, is_available: bool | None = 
 
 
 @router.get("/specials", response_model=list[SpecialOut])
-def list_specials():
+def list_specials(response: Response):
+    # Date-windowed activation — same reasoning as menu-items above.
+    response.headers["Cache-Control"] = "public, max-age=60"
     out = []
     for row in special_repository.list_public():
         image_url = media_service.pop_embedded_media_url(row)
@@ -113,7 +120,8 @@ def list_specials():
 
 
 @router.get("/gallery", response_model=list[GalleryItemOut])
-def list_gallery(category: str | None = None):
+def list_gallery(response: Response, category: str | None = None):
+    response.headers["Cache-Control"] = "public, max-age=300"
     out = []
     for row in gallery_repository.list_public(category):
         media_srcset = media_service.pop_embedded_media_srcset(row)
@@ -123,17 +131,22 @@ def list_gallery(category: str | None = None):
 
 
 @router.get("/event-packages", response_model=list[EventPackageOut])
-def list_event_packages():
+def list_event_packages(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
     return event_package_repository.list_public()
 
 
 @router.get("/rooms", response_model=list[RoomOut])
-def list_rooms():
+def list_rooms(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
     return room_repository.list_public()
 
 
 @router.get("/reviews/featured", response_model=list[ReviewOut])
-def list_featured_reviews():
+def list_featured_reviews(response: Response):
+    # Admin-curated set changes rarely — same cache cadence as the aggregate
+    # rating below, and the one homepage public endpoint that was missing it.
+    response.headers["Cache-Control"] = "public, max-age=300"
     return review_repository.list_featured()
 
 

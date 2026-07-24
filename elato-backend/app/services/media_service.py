@@ -11,6 +11,7 @@ delete-old-variants logic exists in exactly one place rather than being
 copy-pasted per entity.
 """
 
+import asyncio
 import io
 import logging
 import uuid
@@ -163,6 +164,20 @@ async def process_and_store(
             status_code=422,
         )
 
+    # Everything below is either CPU-bound (Pillow decode/resize/encode, x3
+    # breakpoints x up to 3 formats) or a blocking network call (up to 9
+    # sequential Supabase Storage uploads) — run off the event loop so one
+    # admin's upload can't stall every public request the single Uvicorn
+    # worker is otherwise serving concurrently.
+    return await asyncio.to_thread(_process_and_store_sync, raw, bucket, alt_text, uploaded_by)
+
+
+def _process_and_store_sync(
+    raw: bytes,
+    bucket: str,
+    alt_text: str | None,
+    uploaded_by: str,
+) -> tuple[dict, list[StoredVariant]]:
     _sniff_image_type(raw)  # raises if not a real image
 
     try:
@@ -184,43 +199,66 @@ async def process_and_store(
     stem = uuid.uuid4().hex
     variants: list[StoredVariant] = []
     canonical_path = ""
+    # Every object actually written to Storage during this call — tracked so
+    # a failure partway through (a WebP/JPEG upload, or the final DB write)
+    # can roll back everything already uploaded rather than leaving orphaned
+    # variant files with no `media` row pointing at them.
+    uploaded_paths: list[str] = []
 
-    for label, max_width in _BREAKPOINTS.items():
-        resized = source.copy()
-        resized.thumbnail((max_width, max_width * 4), Image.LANCZOS)
+    try:
+        for label, max_width in _BREAKPOINTS.items():
+            resized = source.copy()
+            resized.thumbnail((max_width, max_width * 4), Image.LANCZOS)
 
-        for fmt, ext, content_type in (("WEBP", "webp", "image/webp"), ("JPEG", "jpg", "image/jpeg")):
-            encoded = _encode(resized, fmt)
-            path = f"{stem}/{label}.{ext}"
-            supabase.storage.from_(bucket).upload(
-                path, encoded, {"content-type": content_type, "cache-control": "31536000"}
-            )
-            public_url = supabase.storage.from_(bucket).get_public_url(path)
-            variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format=fmt.lower()))
-            if label == "lg" and fmt == "WEBP":
-                canonical_path = path
+            for fmt, ext, content_type in (("WEBP", "webp", "image/webp"), ("JPEG", "jpg", "image/jpeg")):
+                encoded = _encode(resized, fmt)
+                path = f"{stem}/{label}.{ext}"
+                supabase.storage.from_(bucket).upload(
+                    path, encoded, {"content-type": content_type, "cache-control": "31536000"}
+                )
+                uploaded_paths.append(path)
+                public_url = supabase.storage.from_(bucket).get_public_url(path)
+                variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format=fmt.lower()))
+                if label == "lg" and fmt == "WEBP":
+                    canonical_path = path
 
-        try:
-            avif_encoded = _encode(resized, "AVIF")
-            avif_path = f"{stem}/{label}.avif"
-            supabase.storage.from_(bucket).upload(
-                avif_path, avif_encoded, {"content-type": "image/avif", "cache-control": "31536000"}
-            )
-            public_url = supabase.storage.from_(bucket).get_public_url(avif_path)
-            variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format="avif"))
-        except Exception:
-            pass  # AVIF is best-effort; WebP/JPEG fallback above always succeeds.
+            try:
+                avif_encoded = _encode(resized, "AVIF")
+                avif_path = f"{stem}/{label}.avif"
+                supabase.storage.from_(bucket).upload(
+                    avif_path, avif_encoded, {"content-type": "image/avif", "cache-control": "31536000"}
+                )
+                uploaded_paths.append(avif_path)
+                public_url = supabase.storage.from_(bucket).get_public_url(avif_path)
+                variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format="avif"))
+            except Exception:
+                pass  # AVIF is best-effort; WebP/JPEG fallback above always succeeds — never rolled back for.
 
-    media_row = media_repository.create(
-        {
-            "storage_path": canonical_path,
-            "alt_text": alt_text,
-            "width": source.width,
-            "height": source.height,
-            "bucket": bucket,
-            "uploaded_by": uploaded_by,
-        }
-    )
+        media_row = media_repository.create(
+            {
+                "storage_path": canonical_path,
+                "alt_text": alt_text,
+                "width": source.width,
+                "height": source.height,
+                "bucket": bucket,
+                "uploaded_by": uploaded_by,
+            }
+        )
+    except Exception:
+        if uploaded_paths:
+            try:
+                supabase.storage.from_(bucket).remove(uploaded_paths)
+            except Exception as cleanup_exc:
+                # Cleanup itself failing is logged, not raised — the original
+                # error is what the caller needs to see; a dangling variant
+                # left behind after a failed cleanup is a known, visible
+                # tradeoff, not a silent one.
+                logger.error(
+                    f"Failed to roll back {len(uploaded_paths)} partially-uploaded variant(s) "
+                    f"for stem={stem} bucket={bucket}: {cleanup_exc}"
+                )
+        raise
+
     return media_row, variants
 
 

@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Warms the DNS/TCP/TLS connection to the backend before the first of
+         the ~6 parallel homepage API calls (site-content, hero-backgrounds,
+         reviews, instagram, etc.) actually fires — saves a full round trip
+         off each of them on a cold connection. %VITE_API_BASE_URL% is Vite's
+         own build-time HTML env substitution (see vite.config.ts env docs),
+         so this always points at whatever backend the current build was
+         configured for; blank in a misconfigured build is a no-op, not an
+         error. -->
+    <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_API_BASE_URL%" />
     <title>ELATŌ | Crafting Moments Worth Savoring</title>
     <meta name="description" content="ELATŌ — a premium dessert café, boutique stay, and celebration destination in Mangalore, India." />
     <script>
