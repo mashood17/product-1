@@ -12,8 +12,15 @@ phone/DSLR/screen-recording (whatever they have) without pre-compressing —
 every upload is re-encoded to a small, quality-targeted MP4 before it ever
 reaches Storage, so a heavy source file never becomes a heavy delivered file.
 
+Everything here is disk-backed, not RAM-backed: the incoming upload is
+stream-copied to a temp file (never held as one big `bytes` object), ffmpeg
+reads/writes temp files directly, and the compressed result is uploaded to
+Supabase straight from an open file handle. This matters on a memory-
+constrained Render instance — see the module-level comment on
+`_process_and_upload_hero_video` for the incident this was fixed after.
+
 Deliberately structured so that changes: everything that inspects or
-transforms the raw bytes goes through the `VideoProcessor` protocol below.
+transforms the video goes through the `VideoProcessor` protocol below.
 Swapping `_processor` for a different metadata/poster backend is the only
 change needed there — the API routes, the DB schema, and the frontend all
 already treat "one stored video + optional poster" as the contract and don't
@@ -70,6 +77,15 @@ _COMPRESSION_PROFILES: dict[str, dict[str, int]] = {
 # for a <=20s clip encoded once at upload time, not per-request.
 _ENCODE_PRESET = "medium"
 _TRANSCODE_TIMEOUT_SECONDS = 180
+# Fixed, small thread count rather than ffmpeg's auto-detected default. This
+# is a memory fix, not just a CPU one: libx264 allocates per-thread frame/
+# lookahead buffers, and on a cgroup-limited container (Render's smaller
+# plans report a fractional CPU quota, e.g. 0.5) auto-detection can still see
+# the *host's* full core count and size buffers for threads it will never
+# get meaningful scheduling time on — paying the memory cost of parallelism
+# the container can't actually use. 2 keeps that bounded while still being
+# well within the 180s timeout for a <=20s clip.
+_ENCODE_THREADS = 2
 
 
 @dataclass
@@ -81,24 +97,27 @@ class VideoProbe:
 
 
 class VideoProcessor(Protocol):
-    def probe(self, raw: bytes) -> VideoProbe: ...
+    def probe(self, path: str) -> VideoProbe: ...
 
 
 class PyAvProbe:
-    """Best-effort metadata + poster-frame extraction using PyAV. Any
-    failure (library not installed, unsupported container, corrupt file)
-    degrades to an empty probe rather than blocking the upload — duration/
-    dimension checks are simply skipped, and the admin can upload a poster
-    image manually via the fallback endpoint."""
+    """Best-effort metadata + poster-frame extraction using PyAV, reading
+    directly from a file path (never a `BytesIO`-wrapped in-memory copy —
+    PyAV/libav can open a path natively, so there's no reason to duplicate
+    the file into RAM just to hand it a stream). Any failure (library not
+    installed, unsupported container, corrupt file) degrades to an empty
+    probe rather than blocking the upload — duration/dimension checks are
+    simply skipped, and the admin can upload a poster image manually via the
+    fallback endpoint."""
 
-    def probe(self, raw: bytes) -> VideoProbe:
+    def probe(self, path: str) -> VideoProbe:
         try:
             import av
         except ImportError:
             return VideoProbe()
 
         try:
-            container = av.open(io.BytesIO(raw))
+            container = av.open(path)
             try:
                 stream = next((s for s in container.streams if s.type == "video"), None)
                 if stream is None:
@@ -130,6 +149,9 @@ class PyAvProbe:
 
 
 def _frame_to_jpeg(frame: Any) -> bytes:
+    # A single decoded frame, re-encoded as a small JPEG — this one stays
+    # in-memory. It's a few hundred KB at most, nowhere near the size that
+    # made the raw video worth keeping off the heap.
     img = frame.to_image().convert("RGB")
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
@@ -139,12 +161,15 @@ def _frame_to_jpeg(frame: Any) -> bytes:
 _processor: VideoProcessor = PyAvProbe()
 
 
-def _sniff_video_mime(raw: bytes) -> str:
-    # Checked against real file content, not the filename/extension — same
-    # rule the image pipeline (media_service._sniff_image_type) follows.
-    if len(raw) >= 8 and raw[4:8] == b"ftyp":
+def _sniff_video_mime_at_path(path: Path) -> str:
+    # Reads only the first 12 bytes off disk — checked against real file
+    # content, not the filename/extension, same rule the image pipeline
+    # (media_service._sniff_image_type) follows. Never loads the full file.
+    with open(path, "rb") as f:
+        header = f.read(12)
+    if len(header) >= 8 and header[4:8] == b"ftyp":
         return "video/mp4"
-    if raw[:4] == b"\x1a\x45\xdf\xa3":
+    if header[:4] == b"\x1a\x45\xdf\xa3":
         return "video/webm"
     raise AppError(code="invalid_file", message="File is not a recognized MP4 or WebM video.", status_code=422)
 
@@ -155,12 +180,15 @@ class VideoTranscodeError(Exception):
         super().__init__(f"ffmpeg transcode failed: {stderr[-2000:]}")
 
 
-def _transcode_to_h264(raw: bytes, slot: str) -> bytes:
+def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
     """Synchronous and CPU-bound — every caller must run this via
     `asyncio.to_thread` (or similar), never call it directly from an `async
     def` route/service. Re-encodes to H.264 MP4 via the static ffmpeg binary
     `imageio-ffmpeg` bundles in its wheel (no system `apt install ffmpeg` —
-    works the same on Render's build image as it does locally):
+    works the same on Render's build image as it does locally). Reads
+    `source_path` and writes `out_path` directly — ffmpeg does its own
+    disk I/O as a separate OS process; nothing here touches Python-heap
+    memory for the video bytes themselves.
 
     - `-an` drops audio entirely — hero videos are always muted/looped, so
       an audio track is pure dead weight.
@@ -170,9 +198,15 @@ def _transcode_to_h264(raw: bytes, slot: str) -> bytes:
     - `-crf` is quality-targeted rather than a fixed bitrate, so a visually
       simple clip lands well under the cap instead of always spending the
       same bits.
+    - `-threads` is fixed and small (see `_ENCODE_THREADS`) — bounds libx264's
+      own peak memory on a constrained container, independent of anything on
+      the Python side.
     - `+faststart` moves the MP4 moov atom to the front of the file so a
       browser can begin playback after downloading the first chunk instead
       of needing the full file first.
+    - `-loglevel error` keeps ffmpeg's stderr (captured by `subprocess.run`
+      into parent-process memory) to just real errors, not the default
+      per-frame progress chatter.
     """
     profile = _COMPRESSION_PROFILES.get(slot, _COMPRESSION_PROFILES["desktop"])
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -183,152 +217,194 @@ def _transcode_to_h264(raw: bytes, slot: str) -> bytes:
         "force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
     )
 
-    with tempfile.TemporaryDirectory(prefix="elato-hero-") as tmp_dir:
-        in_path = Path(tmp_dir) / "source"
-        out_path = Path(tmp_dir) / "output.mp4"
-        in_path.write_bytes(raw)
-
-        cmd = [
-            ffmpeg_exe,
-            "-y",
-            "-i", str(in_path),
-            "-an",
-            "-vf", scale,
-            "-c:v", "libx264",
-            "-preset", _ENCODE_PRESET,
-            "-crf", str(profile["crf"]),
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            str(out_path),
-        ]
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=_TRANSCODE_TIMEOUT_SECONDS
-        )
-        if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
-            raise VideoTranscodeError(result.stderr)
-
-        return out_path.read_bytes()
+    cmd = [
+        ffmpeg_exe,
+        "-y",
+        "-loglevel", "error",
+        "-i", str(source_path),
+        "-an",
+        "-vf", scale,
+        "-c:v", "libx264",
+        "-preset", _ENCODE_PRESET,
+        "-crf", str(profile["crf"]),
+        "-threads", str(_ENCODE_THREADS),
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(out_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=_TRANSCODE_TIMEOUT_SECONDS)
+    if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+        raise VideoTranscodeError(result.stderr)
 
 
-def _process_and_upload_hero_video(raw: bytes, slot: str, uploaded_by: str) -> dict[str, Any]:
+def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
+    """Copies the incoming upload to `dest` in fixed-size chunks, enforcing
+    `max_bytes` as it goes (aborts as soon as the cap is crossed, rather than
+    reading the whole — possibly huge — file first and rejecting it after).
+    Runs synchronously (called from inside the `asyncio.to_thread` body, not
+    the event loop) so it can use `file.file` — Starlette's underlying sync
+    file object — directly. `file.file` is already disk-backed for anything
+    over 1MB (Starlette's own `SpooledTemporaryFile` rolls to disk past that
+    threshold before our code ever runs); reading it with `await file.read()`
+    would pull an already-on-disk file straight back into a single Python
+    `bytes` object for no reason. Copying disk-to-disk in chunks avoids ever
+    holding the full upload in RAM at all."""
+    file.file.seek(0)
+    total = 0
+    chunk_size = 1024 * 1024
+    with open(dest, "wb") as out:
+        while True:
+            chunk = file.file.read(chunk_size)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                limit_mb = max_bytes // (1024 * 1024)
+                raise AppError(
+                    code="file_too_large",
+                    message=f"Video is too large — please keep hero videos under {limit_mb}MB. Pre-compress before uploading.",
+                    status_code=422,
+                )
+            out.write(chunk)
+    return total
+
+
+def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
     """Synchronous body of `upload_hero_video` — everything here is either
     CPU-bound (ffmpeg, PyAV) or a blocking network call (Supabase Storage),
     so `upload_hero_video` runs this whole thing via `asyncio.to_thread`
-    rather than awaiting it piecemeal on the event loop."""
-    _sniff_video_mime(raw)  # cheap magic-byte check — reject junk before spending CPU on a transcode
+    rather than awaiting it piecemeal on the event loop.
 
-    source_probe = _processor.probe(raw)
-    if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
-        raise AppError(
-            code="video_too_long",
-            message=(
-                f"Hero videos must be {_MAX_DURATION_SECONDS}s or shorter (this one is "
-                f"{source_probe.duration_seconds:.1f}s) — they loop, so keep it short."
-            ),
-            status_code=422,
-        )
-    if source_probe.width and source_probe.height:
-        if min(source_probe.width, source_probe.height) < _MIN_DIMENSION:
+    Rewritten after a production incident: the previous version read the
+    whole upload into a `bytes` object (`await file.read()`), wrapped it in
+    `io.BytesIO` for probing (a second full copy), wrote it back out to a
+    temp file for ffmpeg, then read ffmpeg's compressed output fully into a
+    third `bytes` object before uploading. On a memory-constrained Render
+    instance, that Python-side duplication — stacked on top of ffmpeg's own
+    child-process memory for decoding/encoding — exceeded the container's
+    RAM limit and got the whole service OOM-killed and restarted mid-upload.
+    Every step below is disk-backed instead: the upload is stream-copied to
+    a temp file, ffmpeg reads/writes temp files directly, PyAV probes by
+    path, and the compressed result is uploaded from an open file handle —
+    the video's bytes are never held as a single Python object anywhere in
+    this function.
+    """
+    max_bytes = get_settings().hero_video_max_bytes
+
+    with tempfile.TemporaryDirectory(prefix="elato-hero-") as tmp_dir:
+        source_path = Path(tmp_dir) / "source"
+        out_path = Path(tmp_dir) / "output.mp4"
+
+        total = _stream_upload_to_path(file, source_path, max_bytes)
+        if total == 0:
+            raise AppError(code="invalid_file", message="Uploaded file is empty.", status_code=422)
+
+        _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before spending CPU on a transcode
+
+        source_probe = _processor.probe(str(source_path))
+        if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
             raise AppError(
-                code="video_too_small",
-                message=f"Resolution is too low ({source_probe.width}x{source_probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
+                code="video_too_long",
+                message=(
+                    f"Hero videos must be {_MAX_DURATION_SECONDS}s or shorter (this one is "
+                    f"{source_probe.duration_seconds:.1f}s) — they loop, so keep it short."
+                ),
                 status_code=422,
             )
-        if max(source_probe.width, source_probe.height) > _MAX_DIMENSION:
-            raise AppError(
-                code="video_dimensions_too_large",
-                message=f"Resolution is too high ({source_probe.width}x{source_probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
-                status_code=422,
-            )
+        if source_probe.width and source_probe.height:
+            if min(source_probe.width, source_probe.height) < _MIN_DIMENSION:
+                raise AppError(
+                    code="video_too_small",
+                    message=f"Resolution is too low ({source_probe.width}x{source_probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
+                    status_code=422,
+                )
+            if max(source_probe.width, source_probe.height) > _MAX_DIMENSION:
+                raise AppError(
+                    code="video_dimensions_too_large",
+                    message=f"Resolution is too high ({source_probe.width}x{source_probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
+                    status_code=422,
+                )
 
-    try:
-        compressed = _transcode_to_h264(raw, slot)
-    except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
-        stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
-        logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
-        raise AppError(
-            code="video_processing_failed",
-            message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
-            status_code=502,
-        ) from exc
-
-    # Re-probe the *compressed* output — the transcode may have downscaled
-    # it, so this is what's actually being delivered, not the source's stats.
-    final_probe = _processor.probe(compressed)
-    mime = "video/mp4"  # transcode output is always H.264/MP4 now, regardless of the source container
-    ext = "mp4"
-
-    supabase = get_supabase()
-    stem = uuid.uuid4().hex
-    video_path = f"{slot}/{stem}.{ext}"
-    supabase.storage.from_(VIDEO_BUCKET).upload(
-        video_path, compressed, {"content-type": mime, "cache-control": "31536000"}
-    )
-
-    poster_bucket = None
-    poster_path = None
-    if final_probe.poster_jpeg:
-        candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
         try:
-            supabase.storage.from_(POSTER_BUCKET).upload(
-                candidate_poster_path,
-                final_probe.poster_jpeg,
-                {"content-type": "image/jpeg", "cache-control": "31536000"},
+            _transcode_to_h264(source_path, out_path, slot)
+        except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
+            stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
+            logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
+            raise AppError(
+                code="video_processing_failed",
+                message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
+                status_code=502,
+            ) from exc
+
+        # Re-probe the *compressed* output — the transcode may have downscaled
+        # it, so this is what's actually being delivered, not the source's stats.
+        final_probe = _processor.probe(str(out_path))
+        mime = "video/mp4"  # transcode output is always H.264/MP4 now, regardless of the source container
+        ext = "mp4"
+
+        supabase = get_supabase()
+        stem = uuid.uuid4().hex
+        video_path = f"{slot}/{stem}.{ext}"
+        with open(out_path, "rb") as f:
+            supabase.storage.from_(VIDEO_BUCKET).upload(
+                video_path, f, {"content-type": mime, "cache-control": "31536000"}
             )
-            poster_bucket = POSTER_BUCKET
-            poster_path = candidate_poster_path
-        except Exception as exc:
-            # The video above is already uploaded and about to become the
-            # slot's canonical file — failing the whole request over a poster
-            # hiccup would strand that just-uploaded video as an orphan with
-            # nothing pointing at it. Degrade to "no poster" instead (the
-            # same state a PyAV extraction failure already produces, which
-            # every downstream consumer already handles) rather than raising.
-            logger.error(f"Hero poster upload failed for slot={slot}, continuing without a poster: {exc}")
+        file_size_bytes = out_path.stat().st_size
 
-    existing = hero_background_repository.get_by_slot(slot)
-    row = hero_background_repository.upsert(
-        slot,
-        {
-            "video_bucket": VIDEO_BUCKET,
-            "video_path": video_path,
-            "video_mime": mime,
-            "file_size_bytes": len(compressed),
-            "width": final_probe.width or source_probe.width,
-            "height": final_probe.height or source_probe.height,
-            "duration_seconds": final_probe.duration_seconds or source_probe.duration_seconds,
-            "poster_bucket": poster_bucket,
-            "poster_path": poster_path,
-            "uploaded_by": uploaded_by,
-        },
-    )
+        poster_bucket = None
+        poster_path = None
+        if final_probe.poster_jpeg:
+            candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
+            try:
+                supabase.storage.from_(POSTER_BUCKET).upload(
+                    candidate_poster_path,
+                    final_probe.poster_jpeg,
+                    {"content-type": "image/jpeg", "cache-control": "31536000"},
+                )
+                poster_bucket = POSTER_BUCKET
+                poster_path = candidate_poster_path
+            except Exception as exc:
+                # The video above is already uploaded and about to become the
+                # slot's canonical file — failing the whole request over a poster
+                # hiccup would strand that just-uploaded video as an orphan with
+                # nothing pointing at it. Degrade to "no poster" instead (the
+                # same state a PyAV extraction failure already produces, which
+                # every downstream consumer already handles) rather than raising.
+                logger.error(f"Hero poster upload failed for slot={slot}, continuing without a poster: {exc}")
 
-    if existing:
-        _delete_storage_object(existing["video_bucket"], existing["video_path"])
-        if existing.get("poster_bucket") and existing.get("poster_path"):
-            media_service.delete_image_variants(existing["poster_bucket"], existing["poster_path"])
+        existing = hero_background_repository.get_by_slot(slot)
+        row = hero_background_repository.upsert(
+            slot,
+            {
+                "video_bucket": VIDEO_BUCKET,
+                "video_path": video_path,
+                "video_mime": mime,
+                "file_size_bytes": file_size_bytes,
+                "width": final_probe.width or source_probe.width,
+                "height": final_probe.height or source_probe.height,
+                "duration_seconds": final_probe.duration_seconds or source_probe.duration_seconds,
+                "poster_bucket": poster_bucket,
+                "poster_path": poster_path,
+                "uploaded_by": uploaded_by,
+            },
+        )
 
-    return row
+        if existing:
+            _delete_storage_object(existing["video_bucket"], existing["video_path"])
+            if existing.get("poster_bucket") and existing.get("poster_path"):
+                media_service.delete_image_variants(existing["poster_bucket"], existing["poster_path"])
+
+        return row
 
 
 async def upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
     if slot not in SLOTS:
         raise AppError(code="invalid_slot", message=f"Slot must be one of {SLOTS}.", status_code=422)
 
-    raw = await file.read()
-    if not raw:
-        raise AppError(code="invalid_file", message="Uploaded file is empty.", status_code=422)
-
-    max_bytes = get_settings().hero_video_max_bytes
-    if len(raw) > max_bytes:
-        limit_mb = max_bytes // (1024 * 1024)
-        raise AppError(
-            code="file_too_large",
-            message=f"Video is too large — please keep hero videos under {limit_mb}MB. Pre-compress before uploading.",
-            status_code=422,
-        )
-
-    return await asyncio.to_thread(_process_and_upload_hero_video, raw, slot, uploaded_by)
+    # `file` itself (not its bytes) is handed to the thread — see
+    # `_stream_upload_to_path` for why reading it here first would defeat the
+    # whole point.
+    return await asyncio.to_thread(_process_and_upload_hero_video, file, slot, uploaded_by)
 
 
 async def upload_hero_poster(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
