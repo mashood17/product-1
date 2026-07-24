@@ -34,10 +34,12 @@ import io
 import logging
 import subprocess
 import tempfile
+import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 import imageio_ffmpeg
 from fastapi import UploadFile
@@ -49,6 +51,24 @@ from app.repositories import hero_background_repository
 from app.services import media_service
 
 logger = logging.getLogger("elato.hero_video")
+
+
+@contextmanager
+def _timed_step(step: str, slot: str) -> Iterator[None]:
+    """Logs how long one pipeline step took, so a slow upload can be
+    diagnosed from the logs alone (which step, not just "it was slow").
+    Uses try/finally (not try/except) so the duration is logged whether the
+    step succeeds *or* raises — a step that fails partway through is exactly
+    the case worth timing, not one to skip. Never alters control flow: any
+    exception raised inside the `with` block propagates unchanged after the
+    duration is logged."""
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(f"[hero_video_upload] slot={slot} step={step} duration_ms={duration_ms:.1f}")
+
 
 VIDEO_BUCKET = "hero-videos"
 POSTER_BUCKET = "hero"
@@ -288,113 +308,137 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
     path, and the compressed result is uploaded from an open file handle —
     the video's bytes are never held as a single Python object anywhere in
     this function.
+
+    Instrumented with `_timed_step` around every major step (see that
+    helper's docstring) so a slow or OOM-killed upload can be diagnosed from
+    the logs alone — which step it reached and how long each prior step
+    took, not just "the request never completed." Purely additive logging;
+    no control flow below was changed to add it.
     """
+    request_start = time.perf_counter()
     max_bytes = get_settings().hero_video_max_bytes
 
-    with tempfile.TemporaryDirectory(prefix="elato-hero-") as tmp_dir:
-        source_path = Path(tmp_dir) / "source"
-        out_path = Path(tmp_dir) / "output.mp4"
+    try:
+        with tempfile.TemporaryDirectory(prefix="elato-hero-") as tmp_dir:
+            source_path = Path(tmp_dir) / "source"
+            out_path = Path(tmp_dir) / "output.mp4"
 
-        total = _stream_upload_to_path(file, source_path, max_bytes)
-        if total == 0:
-            raise AppError(code="invalid_file", message="Uploaded file is empty.", status_code=422)
+            with _timed_step("stream_to_temp_file", slot):
+                total = _stream_upload_to_path(file, source_path, max_bytes)
+            if total == 0:
+                raise AppError(code="invalid_file", message="Uploaded file is empty.", status_code=422)
 
-        _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before spending CPU on a transcode
+            _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before spending CPU on a transcode
 
-        source_probe = _processor.probe(str(source_path))
-        if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
-            raise AppError(
-                code="video_too_long",
-                message=(
-                    f"Hero videos must be {_MAX_DURATION_SECONDS}s or shorter (this one is "
-                    f"{source_probe.duration_seconds:.1f}s) — they loop, so keep it short."
-                ),
-                status_code=422,
-            )
-        if source_probe.width and source_probe.height:
-            if min(source_probe.width, source_probe.height) < _MIN_DIMENSION:
+            with _timed_step("metadata_probe_source", slot):
+                source_probe = _processor.probe(str(source_path))
+            if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
                 raise AppError(
-                    code="video_too_small",
-                    message=f"Resolution is too low ({source_probe.width}x{source_probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
+                    code="video_too_long",
+                    message=(
+                        f"Hero videos must be {_MAX_DURATION_SECONDS}s or shorter (this one is "
+                        f"{source_probe.duration_seconds:.1f}s) — they loop, so keep it short."
+                    ),
                     status_code=422,
                 )
-            if max(source_probe.width, source_probe.height) > _MAX_DIMENSION:
-                raise AppError(
-                    code="video_dimensions_too_large",
-                    message=f"Resolution is too high ({source_probe.width}x{source_probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
-                    status_code=422,
+            if source_probe.width and source_probe.height:
+                if min(source_probe.width, source_probe.height) < _MIN_DIMENSION:
+                    raise AppError(
+                        code="video_too_small",
+                        message=f"Resolution is too low ({source_probe.width}x{source_probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
+                        status_code=422,
+                    )
+                if max(source_probe.width, source_probe.height) > _MAX_DIMENSION:
+                    raise AppError(
+                        code="video_dimensions_too_large",
+                        message=f"Resolution is too high ({source_probe.width}x{source_probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
+                        status_code=422,
+                    )
+
+            with _timed_step("ffmpeg_compression", slot):
+                try:
+                    _transcode_to_h264(source_path, out_path, slot)
+                except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
+                    stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
+                    logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
+                    raise AppError(
+                        code="video_processing_failed",
+                        message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
+                        status_code=502,
+                    ) from exc
+
+            # Re-probe the *compressed* output — the transcode may have downscaled
+            # it, so this is what's actually being delivered, not the source's stats.
+            # This single PyAV call does both metadata probing AND poster-frame
+            # extraction/encoding in one pass (see PyAvProbe) — they aren't two
+            # separate calls in this implementation, so they can't be timed
+            # separately without restructuring that class, which is out of scope
+            # for a logging-only change. Named to make that explicit rather than
+            # mislabel it as just one or the other.
+            with _timed_step("metadata_probe_and_poster_generation", slot):
+                final_probe = _processor.probe(str(out_path))
+            mime = "video/mp4"  # transcode output is always H.264/MP4 now, regardless of the source container
+            ext = "mp4"
+
+            supabase = get_supabase()
+            stem = uuid.uuid4().hex
+            video_path = f"{slot}/{stem}.{ext}"
+            with _timed_step("upload_video_to_supabase", slot):
+                with open(out_path, "rb") as f:
+                    supabase.storage.from_(VIDEO_BUCKET).upload(
+                        video_path, f, {"content-type": mime, "cache-control": "31536000"}
+                    )
+            file_size_bytes = out_path.stat().st_size
+
+            poster_bucket = None
+            poster_path = None
+            if final_probe.poster_jpeg:
+                candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
+                with _timed_step("upload_poster_to_supabase", slot):
+                    try:
+                        supabase.storage.from_(POSTER_BUCKET).upload(
+                            candidate_poster_path,
+                            final_probe.poster_jpeg,
+                            {"content-type": "image/jpeg", "cache-control": "31536000"},
+                        )
+                        poster_bucket = POSTER_BUCKET
+                        poster_path = candidate_poster_path
+                    except Exception as exc:
+                        # The video above is already uploaded and about to become the
+                        # slot's canonical file — failing the whole request over a poster
+                        # hiccup would strand that just-uploaded video as an orphan with
+                        # nothing pointing at it. Degrade to "no poster" instead (the
+                        # same state a PyAV extraction failure already produces, which
+                        # every downstream consumer already handles) rather than raising.
+                        logger.error(f"Hero poster upload failed for slot={slot}, continuing without a poster: {exc}")
+
+            with _timed_step("database_update", slot):
+                existing = hero_background_repository.get_by_slot(slot)
+                row = hero_background_repository.upsert(
+                    slot,
+                    {
+                        "video_bucket": VIDEO_BUCKET,
+                        "video_path": video_path,
+                        "video_mime": mime,
+                        "file_size_bytes": file_size_bytes,
+                        "width": final_probe.width or source_probe.width,
+                        "height": final_probe.height or source_probe.height,
+                        "duration_seconds": final_probe.duration_seconds or source_probe.duration_seconds,
+                        "poster_bucket": poster_bucket,
+                        "poster_path": poster_path,
+                        "uploaded_by": uploaded_by,
+                    },
                 )
 
-        try:
-            _transcode_to_h264(source_path, out_path, slot)
-        except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
-            stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
-            logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
-            raise AppError(
-                code="video_processing_failed",
-                message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
-                status_code=502,
-            ) from exc
+            if existing:
+                _delete_storage_object(existing["video_bucket"], existing["video_path"])
+                if existing.get("poster_bucket") and existing.get("poster_path"):
+                    media_service.delete_image_variants(existing["poster_bucket"], existing["poster_path"])
 
-        # Re-probe the *compressed* output — the transcode may have downscaled
-        # it, so this is what's actually being delivered, not the source's stats.
-        final_probe = _processor.probe(str(out_path))
-        mime = "video/mp4"  # transcode output is always H.264/MP4 now, regardless of the source container
-        ext = "mp4"
-
-        supabase = get_supabase()
-        stem = uuid.uuid4().hex
-        video_path = f"{slot}/{stem}.{ext}"
-        with open(out_path, "rb") as f:
-            supabase.storage.from_(VIDEO_BUCKET).upload(
-                video_path, f, {"content-type": mime, "cache-control": "31536000"}
-            )
-        file_size_bytes = out_path.stat().st_size
-
-        poster_bucket = None
-        poster_path = None
-        if final_probe.poster_jpeg:
-            candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
-            try:
-                supabase.storage.from_(POSTER_BUCKET).upload(
-                    candidate_poster_path,
-                    final_probe.poster_jpeg,
-                    {"content-type": "image/jpeg", "cache-control": "31536000"},
-                )
-                poster_bucket = POSTER_BUCKET
-                poster_path = candidate_poster_path
-            except Exception as exc:
-                # The video above is already uploaded and about to become the
-                # slot's canonical file — failing the whole request over a poster
-                # hiccup would strand that just-uploaded video as an orphan with
-                # nothing pointing at it. Degrade to "no poster" instead (the
-                # same state a PyAV extraction failure already produces, which
-                # every downstream consumer already handles) rather than raising.
-                logger.error(f"Hero poster upload failed for slot={slot}, continuing without a poster: {exc}")
-
-        existing = hero_background_repository.get_by_slot(slot)
-        row = hero_background_repository.upsert(
-            slot,
-            {
-                "video_bucket": VIDEO_BUCKET,
-                "video_path": video_path,
-                "video_mime": mime,
-                "file_size_bytes": file_size_bytes,
-                "width": final_probe.width or source_probe.width,
-                "height": final_probe.height or source_probe.height,
-                "duration_seconds": final_probe.duration_seconds or source_probe.duration_seconds,
-                "poster_bucket": poster_bucket,
-                "poster_path": poster_path,
-                "uploaded_by": uploaded_by,
-            },
-        )
-
-        if existing:
-            _delete_storage_object(existing["video_bucket"], existing["video_path"])
-            if existing.get("poster_bucket") and existing.get("poster_path"):
-                media_service.delete_image_variants(existing["poster_bucket"], existing["poster_path"])
-
-        return row
+            return row
+    finally:
+        total_ms = (time.perf_counter() - request_start) * 1000
+        logger.info(f"[hero_video_upload] slot={slot} step=total_request duration_ms={total_ms:.1f}")
 
 
 async def upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
