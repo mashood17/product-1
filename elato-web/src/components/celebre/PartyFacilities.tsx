@@ -21,7 +21,7 @@ const partyContent = {
     'Birthdays, anniversaries, a family catching up, friends marking something small: the room adjusts to the occasion, not the other way around.',
   ],
   capacityLabel: 'Comfortable for up to',
-  capacityValue: '40 Guests', // PLACEHOLDER — client-configurable
+  capacityValue: '15-20 Guests', // PLACEHOLDER — client-configurable
   occasions: ['Birthdays', 'Anniversaries', 'Family Gatherings', 'Friends Meetups', 'Small Celebrations'],
 }
 
@@ -130,7 +130,7 @@ export function PartyFacilities() {
               <path d="M3 10h18M8 3v4M16 3v4" />
             </svg>
             <span className="text-caption whitespace-nowrap normal-case tracking-normal text-secondary-900">
-              {partyContent.occasions.length}+ Occasion Types
+              Where Moments Become Memories
             </span>
           </motion.div>
         </motion.div>

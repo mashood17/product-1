@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Gift } from 'lucide-react'
 import { getActiveOffer } from '../../lib/offerRepository'
@@ -8,6 +9,9 @@ import { useServicesSceneActive } from '../../lib/useServicesSceneActive'
 
 const SHOW_AFTER_PX = 480
 const getShowThreshold = () => SHOW_AFTER_PX
+
+// Home and Celebré only — Stay and Events must not render this at all.
+const ALLOWED_PATHS = new Set(['/', '/elato-celebre'])
 
 /**
  * Persistent floating trigger for the scratch-card offer, stacked directly
@@ -19,6 +23,7 @@ const getShowThreshold = () => SHOW_AFTER_PX
  * disappear together.
  */
 export function FloatingOfferButton() {
+  const { pathname } = useLocation()
   const [hasOffer, setHasOffer] = useState(false)
   const scrolledPast = useScrollPast(getShowThreshold)
   // Hidden while Services is the active full-screen scene (same shared
@@ -35,6 +40,8 @@ export function FloatingOfferButton() {
       cancelled = true
     }
   }, [])
+
+  if (!ALLOWED_PATHS.has(pathname)) return null
 
   return (
     <AnimatePresence>

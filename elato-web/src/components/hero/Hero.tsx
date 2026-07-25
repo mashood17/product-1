@@ -10,6 +10,10 @@ export type HeroProps = {
   ctaLabel: string
   /** Element id the CTA smooth-scrolls to on click. */
   scrollTargetId: string
+  /** Small uppercase kicker shown above `heading` (Home hero only). */
+  eyebrow?: string
+  /** Large editorial heading shown above the CTA (Home hero only). */
+  heading?: string
 }
 
 /**
@@ -21,7 +25,7 @@ export type HeroProps = {
  * itself is now just the video and a single call to action into the page's
  * first content section.
  */
-export function Hero({ id, ctaLabel, scrollTargetId }: HeroProps) {
+export function Hero({ id, ctaLabel, scrollTargetId, eyebrow, heading }: HeroProps) {
   const reduceMotion = useReducedMotion()
   // Pauses the background video + light-drift overlay once this hero has
   // scrolled out of view — both otherwise keep running (and costing GPU/
@@ -42,11 +46,22 @@ export function Hero({ id, ctaLabel, scrollTargetId }: HeroProps) {
       <div className="hero-bg-light" aria-hidden="true" style={{ animationPlayState: heroInView ? 'running' : 'paused' }} />
 
       <motion.div
-        className="absolute inset-x-0 bottom-[3.78125rem] flex flex-col items-center gap-4 sm:bottom-12"
+        className="absolute inset-x-0 bottom-32 flex flex-col items-center px-6 text-center sm:bottom-12"
         initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: reduceMotion ? 0 : 0.6, duration: reduceMotion ? 0.3 : 0.9, ease: EASE_CINEMATIC }}
       >
+        {eyebrow && heading ? (
+          <div className="mb-16 flex flex-col items-center gap-2 sm:mb-9 sm:gap-2.5">
+            <span className="font-sans text-[13px] font-semibold uppercase tracking-[0.32em] text-white sm:text-[13px]">
+              {eyebrow}
+            </span>
+            <h1 className="max-w-[92vw] whitespace-nowrap font-sans text-[clamp(1.9rem,8.5vw,2.75rem)] font-semibold leading-[1.02] tracking-[-0.02em] text-white sm:whitespace-normal sm:text-[41px] md:text-[50px] lg:text-[58px]">
+              {heading}
+            </h1>
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={handleCtaClick}
@@ -61,7 +76,7 @@ export function Hero({ id, ctaLabel, scrollTargetId }: HeroProps) {
           height="20"
           viewBox="0 0 20 20"
           fill="none"
-          className="text-white/70"
+          className="mt-4 text-white/70"
           animate={reduceMotion ? {} : { y: [0, 6, 0] }}
           transition={reduceMotion ? undefined : { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
         >
