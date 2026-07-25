@@ -25,8 +25,8 @@ import type {
   DashboardStats,
   MediaOut,
   MediaUploadResponse,
-  InstagramPostOut,
-  InstagramSyncStatus,
+  VideoGalleryOut,
+  VideoGalleryUpdate,
   AdminOut,
   AdminCreateRequest,
   AdminUpdateRequest,
@@ -137,13 +137,43 @@ export const offerRegistrationsApi = {
     apiPost<OfferRegistrationOut>(`/admin/offer-registrations/${id}/redeem`, payload),
 };
 
-// Instagram: read-only integration status + reel list, synced automatically
-// from the Meta Graph API (see elato-backend/app/services/instagram_service.py)
-// — nothing here creates or edits a reel, "Sync Now" just re-runs the sync.
-export const instagramApi = {
-  getStatus: () => apiGet<InstagramSyncStatus>("/admin/instagram/status"),
-  syncNow: () => apiPost<InstagramSyncStatus>("/admin/instagram/sync", {}),
-  listReels: (params?: ListParamsShape) => apiGet<Page<InstagramPostOut>>("/admin/instagram/reels", { params }),
+// Video Gallery: up to five admin-uploaded showcase clips, shown on the
+// public homepage in place of the removed Instagram feed. Replacing a
+// video's file keeps its row/position — only create() can evict the oldest
+// entry once six exist (see elato-backend/app/services/video_gallery_service.py).
+export const videoGalleryApi = {
+  list: () => apiGet<VideoGalleryOut[]>("/admin/video-gallery"),
+  create: (
+    file: File,
+    caption: string | undefined,
+    instagramUrl: string | undefined,
+    onProgress?: (pct: number) => void,
+    signal?: AbortSignal,
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (caption) form.append("caption", caption);
+    if (instagramUrl) form.append("instagram_url", instagramUrl);
+    return apiPost<VideoGalleryOut>("/admin/video-gallery", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (evt) => {
+        if (onProgress && evt.total) onProgress(Math.round((evt.loaded / evt.total) * 100));
+      },
+      signal,
+    });
+  },
+  updateDetails: (id: string, payload: VideoGalleryUpdate) => apiPatch<VideoGalleryOut>(`/admin/video-gallery/${id}`, payload),
+  replaceVideo: (id: string, file: File, onProgress?: (pct: number) => void) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiPost<VideoGalleryOut>(`/admin/video-gallery/${id}/video`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (evt) => {
+        if (onProgress && evt.total) onProgress(Math.round((evt.loaded / evt.total) * 100));
+      },
+    });
+  },
+  remove: (id: string) => apiDelete<void>(`/admin/video-gallery/${id}`),
 };
 
 export const usersApi = {

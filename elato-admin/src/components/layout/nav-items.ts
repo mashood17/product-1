@@ -13,6 +13,7 @@ import {
   Users,
   Gift,
   ClipboardList,
+  Film,
 } from "lucide-react";
 import type { AdminRole } from "../../types/api";
 
@@ -29,6 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/analytics", label: "Analytics", icon: BarChart3, section: "Overview" },
 
   { to: "/homepage", label: "Homepage", icon: FileText, section: "Content" },
+  { to: "/video-gallery", label: "Video Showcase", icon: Film, section: "Content" },
   { to: "/specials", label: "Specials", icon: Sparkles, section: "Content" },
   { to: "/categories", label: "Categories", icon: FolderTree, section: "Content" },
   { to: "/menu", label: "Menu", icon: UtensilsCrossed, section: "Content" },

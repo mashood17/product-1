@@ -1,12 +1,14 @@
 /**
  * Site content for the Homepage. Business info below is REAL, supplied by
- * the client (project charter, Section 3) — not a placeholder. Instagram
- * feed items, reviews, and aggregate rating remain placeholders pending a
- * live Instagram Graph API / Google Places integration (Phase 8).
+ * the client (project charter, Section 3) — not a placeholder. Reviews and
+ * aggregate rating remain placeholders pending a live Google Places
+ * integration; the Instagram/video showcase section always renders — with a
+ * premium empty state until an admin uploads at least one video (see
+ * VideoShowcaseSection.tsx).
  *
- * Shaped like the future API responses (site_content, instagram_cache,
- * google_reviews_cache) so wiring a real Supabase/FastAPI backend later is a
- * data-source swap, not a rewrite.
+ * Shaped like the future API responses (site_content, google_reviews_cache)
+ * so wiring a real Supabase/FastAPI backend later is a data-source swap,
+ * not a rewrite.
  */
 
 export const businessInfo = {
@@ -123,15 +125,6 @@ export const galleryCategories = [
   'Happy Guests',
   'Behind the Scenes',
 ] // PLACEHOLDER — no real gallery images yet; categories are real, media is not
-
-export const instagramItems = [
-  { id: 'ig-1', permalink: 'https://instagram.com/elato.in', caption: 'Signature sundae, plated for a Friday evening.' },
-  { id: 'ig-2', permalink: 'https://instagram.com/elato.in', caption: 'Morning light in the Stay courtyard.' },
-  { id: 'ig-3', permalink: 'https://instagram.com/elato.in', caption: 'An engagement, celebrated in Celebré.' },
-  { id: 'ig-4', permalink: 'https://instagram.com/elato.in', caption: 'Belgian chocolate, slow-poured.' },
-  { id: 'ig-5', permalink: 'https://instagram.com/elato.in', caption: 'A quiet corner of the boutique stay.' },
-  { id: 'ig-6', permalink: 'https://instagram.com/elato.in', caption: 'Table settings for a milestone birthday.' },
-] // PLACEHOLDER — shaped like GET /api/v1/instagram/latest; real handle @elato.in confirmed, real posts not yet synced
 
 // Real featured-review fallback content lives in `reviewsContent.ts` (used by
 // ReviewsSection when GET /api/v1/reviews/featured has nothing synced yet).

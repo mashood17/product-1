@@ -8,7 +8,7 @@ test.describe('Accessibility (axe-core)', () => {
   for (const route of routes) {
     test(`${route} has zero automated a11y violations`, async ({ page }) => {
       // Several sections fetch from elato-backend on mount (reviews,
-      // Instagram, menu, events) which has no live Supabase data seeded yet
+      // video showcase, menu, events) which has no live Supabase data seeded yet
       // — mock those so every route renders its real "loaded" state instead
       // of a loading skeleton or error fallback, which is what should
       // actually be audited for accessibility.

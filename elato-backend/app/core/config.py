@@ -59,8 +59,6 @@ class Settings(BaseSettings):
 
     google_places_api_key: str | None = Field(default=None, alias="GOOGLE_PLACES_API_KEY")
     google_place_id: str | None = Field(default=None, alias="GOOGLE_PLACE_ID")
-    instagram_graph_token: str | None = Field(default=None, alias="INSTAGRAM_GRAPH_TOKEN")
-    instagram_business_id: str | None = Field(default=None, alias="INSTAGRAM_BUSINESS_ID")
     sync_cron_secret: str = Field(default="dev-only-cron-secret-change-me", alias="SYNC_CRON_SECRET")
 
     cors_allowed_origins: str = Field(

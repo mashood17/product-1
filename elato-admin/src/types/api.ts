@@ -284,7 +284,7 @@ export interface RecentEventGroup {
 export interface DashboardStats {
   total_categories: number;
   total_menu_items: number;
-  total_instagram_reels: number;
+  total_gallery_videos: number;
   total_reviews: number;
   analytics_last_30_days: Record<string, number>;
   recent_events: RecentEventGroup[];
@@ -405,34 +405,22 @@ export interface OfferRegistrationRedeem {
 }
 
 // ---------------------------------------------------------------------------
-// instagram_post.py
+// video_gallery.py
 // ---------------------------------------------------------------------------
 
-export interface InstagramPostOut {
+export interface VideoGalleryOut {
   id: string;
-  media_type: string | null;
-  is_reel: boolean;
-  thumbnail_url: string | null;
-  media_url: string;
-  video_url: string | null;
-  permalink: string | null;
+  video_url: string;
+  video_mime: string;
+  file_size_bytes: number;
   caption: string | null;
-  posted_at: string | null;
-  import_status: "manual" | "synced";
-  synced_at: string | null;
+  instagram_url: string | null;
+  created_at: string;
 }
 
-/** Backs the admin "Instagram Integration" panel — reels themselves are
- * never created or edited from the admin; they come only from the Meta
- * Graph API sync. */
-export interface InstagramSyncStatus {
-  connected: boolean;
-  account_username: string | null;
-  last_synced_at: string | null;
-  last_sync_status: "success" | "error" | "not_configured" | null;
-  last_sync_error: string | null;
-  imported_reels_count: number;
-  auto_sync_enabled: boolean;
+export interface VideoGalleryUpdate {
+  caption?: string | null;
+  instagram_url?: string | null;
 }
 
 // ---------------------------------------------------------------------------

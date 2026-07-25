@@ -2,7 +2,7 @@ import { Seo } from '../components/Seo'
 import { localBusinessJsonLd, organizationJsonLd } from '../lib/jsonLd'
 import { HeroServicesReveal } from '../components/sections/HeroServicesReveal'
 import { About } from '../components/sections/About'
-import { InstagramSection } from '../components/sections/InstagramSection'
+import { VideoShowcaseSection } from '../components/sections/VideoShowcaseSection'
 import { ReviewsSection } from '../components/sections/ReviewsSection'
 import { VisitSection } from '../components/sections/VisitSection'
 import { DeferredMount } from '../lib/DeferredMount'
@@ -19,13 +19,14 @@ export function HomePage() {
       <main>
         <HeroServicesReveal />
         <About />
-        {/* Instagram/Reviews fetch data and set up their own Framer Motion +
-            IntersectionObserver machinery on mount — deferred so that work
-            doesn't compete with the hero's critical-path animation during
-            initial hydration. Neither is a nav-anchor target (unlike About/
-            Visit), so deferring their mount doesn't affect #hash navigation. */}
+        {/* Video Showcase/Reviews fetch data and set up their own Framer
+            Motion + IntersectionObserver machinery on mount — deferred so
+            that work doesn't compete with the hero's critical-path
+            animation during initial hydration. Neither is a nav-anchor
+            target (unlike About/Visit), so deferring their mount doesn't
+            affect #hash navigation. */}
         <DeferredMount>
-          <InstagramSection />
+          <VideoShowcaseSection />
         </DeferredMount>
         <DeferredMount>
           <ReviewsSection />

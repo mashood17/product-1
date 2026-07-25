@@ -6,7 +6,6 @@ from app.api.v1 import (
     admin_event_packages,
     admin_gallery,
     admin_hero_backgrounds,
-    admin_instagram,
     admin_media,
     admin_menu_items,
     admin_offer_registrations,
@@ -17,6 +16,7 @@ from app.api.v1 import (
     admin_site_content,
     admin_specials,
     admin_users,
+    admin_video_gallery,
     auth,
     public,
     sync,
@@ -40,6 +40,6 @@ api_router.include_router(admin_media.router)
 api_router.include_router(admin_hero_backgrounds.router)
 api_router.include_router(admin_offers.router)
 api_router.include_router(admin_offer_registrations.router)
-api_router.include_router(admin_instagram.router)
+api_router.include_router(admin_video_gallery.router)
 api_router.include_router(admin_users.router)
 api_router.include_router(sync.router)

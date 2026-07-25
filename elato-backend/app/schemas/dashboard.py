@@ -10,7 +10,7 @@ class RecentEventGroup(BaseModel):
 class DashboardStats(BaseModel):
     total_categories: int
     total_menu_items: int
-    total_instagram_reels: int
+    total_gallery_videos: int
     total_reviews: int
     analytics_last_30_days: dict[str, int]
     recent_events: list[RecentEventGroup]

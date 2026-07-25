@@ -13,6 +13,7 @@ import { EventsPage } from "./features/events/EventsPage";
 import { StayPage } from "./features/stay/StayPage";
 import { CelebrePage } from "./features/celebre/CelebrePage";
 import { HomepagePage } from "./features/homepage/HomepagePage";
+import { VideoGalleryPage } from "./features/video-gallery/VideoGalleryPage";
 import { OffersPage } from "./features/offers/OffersPage";
 import { OfferRegistrationsPage } from "./features/offers/OfferRegistrationsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
@@ -42,6 +43,7 @@ function App() {
             <Route path="/events" element={<EventsPage />} />
             <Route path="/stay" element={<StayPage />} />
             <Route path="/homepage" element={<HomepagePage />} />
+            <Route path="/video-gallery" element={<VideoGalleryPage />} />
             <Route path="/offers" element={<OffersPage />} />
             <Route path="/offer-registrations" element={<OfferRegistrationsPage />} />
             <Route

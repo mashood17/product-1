@@ -7,7 +7,7 @@ import { ApiError, registerForOffer } from '../../lib/offerRepository'
 import { getVisitorId } from '../../lib/visitorId'
 import { trackEvent } from '../../lib/analytics'
 
-type Errors = Partial<Record<'name' | 'phone' | 'consent', string>>
+type Errors = Partial<Record<'name' | 'phone' | 'consent' | 'policyConsent', string>>
 
 interface AvailOfferFormProps {
   offerId: string
@@ -25,6 +25,7 @@ export function AvailOfferForm({ offerId, buttonText, onSuccess, onAlreadyClaime
   const [countryIso, setCountryIso] = useState(DEFAULT_COUNTRY_ISO)
   const [phone, setPhone] = useState('')
   const [consent, setConsent] = useState(false)
+  const [policyConsent, setPolicyConsent] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -33,6 +34,7 @@ export function AvailOfferForm({ offerId, buttonText, onSuccess, onAlreadyClaime
     name: validateName(name),
     phone: validatePhoneForCountry(dialCodeForIso(countryIso), phone),
     consent: consent ? undefined : 'Please agree to continue.',
+    policyConsent: policyConsent ? undefined : 'Please agree to the Privacy Policy and Terms & Conditions to continue.',
   })
 
   async function onSubmit(e: FormEvent) {
@@ -110,23 +112,68 @@ export function AvailOfferForm({ offerId, buttonText, onSuccess, onAlreadyClaime
         />
       </div>
 
-      <label className="flex items-start gap-2.5 text-caption text-[#e7caa0]/70">
-        <input
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => {
-            setConsent(e.target.checked)
-            setErrors((prev) => ({ ...prev, consent: undefined }))
-          }}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#E7CAA0]/40 bg-transparent text-[#E7CAA0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E7CAA0]"
-        />
-        <span>I agree to receive promotional offers and updates from ELATŌ.</span>
-      </label>
-      {errors.consent && (
-        <p className="-mt-2 text-caption text-red-300" aria-live="polite">
-          {errors.consent}
-        </p>
-      )}
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="flex items-start gap-2.5 text-caption text-[#e7caa0]/70">
+            <input
+              type="checkbox"
+              checked={policyConsent}
+              onChange={(e) => {
+                setPolicyConsent(e.target.checked)
+                setErrors((prev) => ({ ...prev, policyConsent: undefined }))
+              }}
+              aria-describedby={errors.policyConsent ? 'offer-policy-consent-error' : undefined}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#E7CAA0]/40 bg-transparent text-[#E7CAA0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E7CAA0]"
+            />
+            <span>
+              I agree to the{' '}
+              <a
+                href="/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#E7CAA0] underline-offset-2 transition-colors duration-300 ease-out hover:text-[#f0dcb8] hover:underline"
+              >
+                Privacy Policy
+              </a>{' '}
+              and{' '}
+              <a
+                href="/terms-conditions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#E7CAA0] underline-offset-2 transition-colors duration-300 ease-out hover:text-[#f0dcb8] hover:underline"
+              >
+                Terms &amp; Conditions
+              </a>
+              .
+            </span>
+          </label>
+          {errors.policyConsent && (
+            <p id="offer-policy-consent-error" className="mt-1.5 text-caption text-red-300" aria-live="polite">
+              {errors.policyConsent}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="flex items-start gap-2.5 text-caption text-[#e7caa0]/70">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => {
+                setConsent(e.target.checked)
+                setErrors((prev) => ({ ...prev, consent: undefined }))
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#E7CAA0]/40 bg-transparent text-[#E7CAA0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E7CAA0]"
+            />
+            <span>I agree to receive promotional offers and updates from ELATŌ.</span>
+          </label>
+          {errors.consent && (
+            <p className="mt-1.5 text-caption text-red-300" aria-live="polite">
+              {errors.consent}
+            </p>
+          )}
+        </div>
+      </div>
 
       {formError && (
         <p className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-caption text-red-200" role="alert">

@@ -12,22 +12,21 @@ from app.repositories import (
     event_package_repository,
     gallery_repository,
     hero_background_repository,
-    instagram_repository,
     menu_item_repository,
     review_repository,
     room_repository,
     site_content_repository,
     special_repository,
+    video_gallery_repository,
 )
 from app.repositories import analytics_repository
-from app.services import hero_video_service, media_service, offer_registration_service, offer_service
+from app.services import hero_video_service, media_service, offer_registration_service, offer_service, video_gallery_service
 from app.schemas.analytics_event import AnalyticsEventCreate
 from app.schemas.category import CategoryOut
 from app.schemas.enquiry import EnquiryCreate, EnquiryOut
 from app.schemas.event_package import EventPackageOut
 from app.schemas.gallery import GalleryItemOut
 from app.schemas.hero_background import HeroBackgroundOut
-from app.schemas.instagram_post import InstagramPostOut
 from app.schemas.menu_item import MenuItemOut
 from app.schemas.offer import ActiveOfferOut
 from app.schemas.offer_registration import OfferRegistrationCreate, OfferRegistrationOut
@@ -35,6 +34,7 @@ from app.schemas.review import ReviewAggregateOut, ReviewOut
 from app.schemas.room import RoomOut
 from app.schemas.site_content import SiteContentOut
 from app.schemas.special import SpecialOut
+from app.schemas.video_gallery import VideoGalleryOut
 
 router = APIRouter(prefix="", tags=["public"])
 
@@ -158,13 +158,12 @@ def get_reviews_aggregate(response: Response):
     return review_repository.get_aggregate()
 
 
-@router.get("/instagram/latest", response_model=list[InstagramPostOut])
-def list_latest_instagram(response: Response):
-    # instagram_posts is a synced cache (see instagram_service), not a live
-    # Instagram call — safe to let browsers/CDN cache the response briefly
-    # rather than hit Supabase on every homepage load.
-    response.headers["Cache-Control"] = "public, max-age=300"
-    return instagram_repository.list_latest(cap=8)
+@router.get("/video-gallery", response_model=list[VideoGalleryOut])
+def list_video_gallery():
+    # No cache header, deliberately — same reasoning as /offers/active: a
+    # deleted/replaced video must disappear from the public site on the very
+    # next load, not stay visible for up to 5 minutes behind a browser/CDN TTL.
+    return [video_gallery_service.to_schema(row) for row in video_gallery_repository.list_all()]
 
 
 @router.post("/enquiries", response_model=EnquiryOut, status_code=201)

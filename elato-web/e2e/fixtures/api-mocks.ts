@@ -5,8 +5,8 @@ import type { Page } from '@playwright/test'
  *
  * As of the "Backend Structure" commit, elato-web's repositories
  * (menuRepository.ts, eventsRepository.ts, reviewsRepository.ts,
- * instagramRepository.ts) call a real FastAPI backend instead of local mock
- * content. That backend has no live Supabase data seeded yet (migrations
+ * videoGalleryRepository.ts) call a real FastAPI backend instead of local
+ * mock content. That backend has no live Supabase data seeded yet (migrations
  * are written but not applied — see elato-backend/README.md), so hitting it
  * for real in E2E would just render every section's "couldn't be loaded"
  * fallback state.
@@ -102,17 +102,18 @@ export async function mockHomeApi(page: Page) {
     }),
   )
 
-  await page.route('**/api/v1/instagram/latest', (route) =>
+  await page.route('**/api/v1/video-gallery', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([
         {
-          id: 'ig-1',
-          media_url: 'https://example.com/image.jpg',
-          video_url: null,
-          permalink: 'https://instagram.com/elato.in',
+          id: 'vid-1',
+          video_url: 'https://example.com/video.mp4',
+          video_mime: 'video/mp4',
           caption: 'Signature sundae, plated for a Friday evening.',
+          instagram_url: 'https://www.instagram.com/elato.in/',
+          created_at: '2026-01-01T00:00:00Z',
         },
       ]),
     }),

@@ -31,7 +31,7 @@ export default defineConfig({
   // elato-backend is NOT started here as a second webServer. As of the
   // "Backend Structure" commit, elato-web's repositories/forms DO call a
   // real FastAPI backend (src/lib/apiClient.ts + menuRepository.ts,
-  // eventsRepository.ts, reviewsRepository.ts, instagramRepository.ts,
+  // eventsRepository.ts, reviewsRepository.ts, videoGalleryRepository.ts,
   // enquiryRepository.ts) — but that backend has no live Supabase data
   // seeded yet (migrations written, not applied; see
   // elato-backend/README.md). Rather than depend on backend/DB state that

@@ -3,7 +3,6 @@ import { siteContentApi } from "../../api/resources";
 import { ErrorState, PageHeader } from "../../components/ui";
 import { SectionImageCard } from "../shared/SectionImageCard";
 import { HeroBackgroundSection } from "./HeroBackgroundSection";
-import { InstagramSection } from "../instagram/InstagramSection";
 import { ReviewsSection } from "../reviews/ReviewsSection";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
@@ -40,7 +39,7 @@ export function HomepagePage() {
 
   return (
     <div>
-      <PageHeader title="Homepage" description="Services and About images, Instagram reels and reviews shown on the public homepage." />
+      <PageHeader title="Homepage" description="Services and About images and reviews shown on the public homepage. The video showcase has its own page." />
 
       {isError ? (
         <ErrorState description={errorMessage(error)} onRetry={() => void refetch()} />
@@ -90,11 +89,6 @@ export function HomepagePage() {
               onSave={(image) => saveMutation.mutate({ key: ABOUT_IMAGE_KEY, value: image })}
               isSaving={saveMutation.isPending && saveMutation.variables?.key === ABOUT_IMAGE_KEY}
             />
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Instagram</p>
-            <InstagramSection />
           </div>
 
           <div>

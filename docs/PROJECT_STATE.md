@@ -182,15 +182,16 @@ Pending
 
 ---
 
-## Instagram
+## Video Showcase
 
 Status
 
-🟢 Done — automatic Graph API sync (backend service + admin "Instagram Integration" panel + `.github/workflows/instagram-sync.yml` scheduler)
+🟢 Done — replaces the old Instagram Graph API sync entirely with an admin-managed video gallery (backend service + admin "Video Showcase" page + public `/api/v1/video-gallery`). Up to 5 clips, newest first; a 6th upload retires the oldest. 30MB size cap, MP4/WebM only, original quality preserved (no transcoding). Optional per-video Instagram link (instagram.com only — anything else is dropped); the public site falls back to the ELATŌ profile whenever a video has no link.
 
 Pending
 
-- Set `INSTAGRAM_GRAPH_TOKEN` / `INSTAGRAM_BUSINESS_ID` in Render and `BACKEND_SYNC_URL` / `SYNC_CRON_SECRET` GitHub repo secrets (see elato-backend/.env.example)
+- Apply `elato-backend/migrations/0014_video_gallery.sql` to the live Supabase project (creates `video_gallery` + `video-gallery` bucket, drops the now-empty `instagram_posts`/`instagram_sync_status` tables) — written to the repo but not yet run against production.
+- Upload the first videos via the admin Video Showcase page — the public section renders nothing until at least one exists.
 
 ---
 

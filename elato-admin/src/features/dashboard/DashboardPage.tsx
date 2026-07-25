@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { FolderTree, UtensilsCrossed, Camera, Star, ArrowUpRight, Activity } from "lucide-react";
+import { FolderTree, UtensilsCrossed, Film, Star, ArrowUpRight, Activity } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { dashboardApi } from "../../api/resources";
 import { Card, CardBody, CardHeader, ErrorState, PageHeader, StatCardSkeleton } from "../../components/ui";
@@ -28,7 +28,7 @@ export function DashboardPage() {
               <>
                 <StatCard icon={FolderTree} label="Menu Categories" value={data.total_categories} to="/categories" manageLabel="Manage" />
                 <StatCard icon={UtensilsCrossed} label="Menu Items" value={data.total_menu_items} to="/menu" manageLabel="Manage" />
-                <StatCard icon={Camera} label="Instagram Reels" value={data.total_instagram_reels} to="/homepage" />
+                <StatCard icon={Film} label="Video Showcase" value={data.total_gallery_videos} to="/video-gallery" />
                 <StatCard icon={Star} label="Reviews" value={data.total_reviews} to="/homepage" />
               </>
             )}
