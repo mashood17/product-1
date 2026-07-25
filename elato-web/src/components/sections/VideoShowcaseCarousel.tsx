@@ -27,7 +27,7 @@ const ARROW_CLASSES =
 export function VideoShowcaseCarousel({ videos }: { videos: VideoGalleryItem[] }) {
   const reduceMotion = useReducedMotion()
   const trackRef = useRef<HTMLDivElement>(null)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const activeIndexRef = useRef(0)
 
@@ -83,7 +83,7 @@ export function VideoShowcaseCarousel({ videos }: { videos: VideoGalleryItem[] }
     measure()
 
     const onScroll = () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = requestAnimationFrame(measure)
     }
     track.addEventListener('scroll', onScroll, { passive: true })
@@ -100,7 +100,7 @@ export function VideoShowcaseCarousel({ videos }: { videos: VideoGalleryItem[] }
     return () => {
       track.removeEventListener('scroll', onScroll)
       resizeObserver.disconnect()
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
   }, [applyEdgePadding, measure, centerOn, videos.length])
 
