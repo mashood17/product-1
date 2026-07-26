@@ -20,6 +20,7 @@ import {
 import { SortableList } from "../../components/ui/SortableList";
 import { ImagePickerField } from "../media/ImagePickerField";
 import { mediaQueryKey } from "../media/media-query-key";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
@@ -299,7 +300,7 @@ function CategoryFormModal({
           onChange={(e) => setDescription(e.target.value)}
           hint="Shown under the category name on the public menu."
         />
-        <ImagePickerField label="Cover image" bucket="categories" imageId={imageId} onChange={setImageId} />
+        <ImagePickerField label="Cover image" bucket="categories" imageId={imageId} onChange={setImageId} spec={DIMENSION_SPECS.category} />
         <Switch checked={isActive} onChange={setIsActive} label="Active (visible on the public site)" />
       </form>
     </Modal>

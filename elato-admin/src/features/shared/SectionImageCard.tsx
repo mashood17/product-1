@@ -3,7 +3,10 @@ import { ImagePlus } from "lucide-react";
 import { mediaApi } from "../../api/resources";
 import { mediaQueryKey } from "../media/media-query-key";
 import { useImageUpload } from "../media/useImageUpload";
+import { UploadSpecHint } from "../media/UploadSpecHint";
+import { BUCKET_MAX_BYTES } from "../media/upload-limits";
 import { Button, Card, CardBody, CardHeader } from "../../components/ui";
+import type { DimensionSpec } from "../media/upload-specs";
 import type { MediaBucket } from "../../types/api";
 
 interface SectionImageValue {
@@ -29,6 +32,7 @@ export function SectionImageCard({
   value,
   onSave,
   isSaving,
+  spec,
 }: {
   label: string;
   description?: string;
@@ -36,6 +40,7 @@ export function SectionImageCard({
   value: unknown;
   onSave: (image: { media_id: string; url: string } | null) => void;
   isSaving?: boolean;
+  spec?: DimensionSpec;
 }) {
   const parsed = isSectionImageValue(value) ? value : undefined;
   const mediaId = parsed?.media_id ?? null;
@@ -47,8 +52,10 @@ export function SectionImageCard({
   });
   const resolvedUrl = parsed?.url ?? (mediaId ? data?.items.find((m) => m.id === mediaId)?.url : undefined);
 
-  const { open, isUploading, progress, inputElement } = useImageUpload(bucket, (media) =>
-    onSave({ media_id: media.id, url: media.url }),
+  const { open, isUploading, progress, inputElement } = useImageUpload(
+    bucket,
+    (media) => onSave({ media_id: media.id, url: media.url }),
+    spec,
   );
   const busy = isUploading || isSaving;
 
@@ -80,6 +87,7 @@ export function SectionImageCard({
             {isUploading && (
               <p className="text-xs text-neutral-400">Uploading{progress !== null ? ` — ${progress}%` : "…"}</p>
             )}
+            {spec && !isUploading && <UploadSpecHint maxBytes={BUCKET_MAX_BYTES[bucket]} spec={spec} />}
           </div>
         </div>
       </CardBody>

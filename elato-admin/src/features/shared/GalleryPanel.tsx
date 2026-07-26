@@ -18,6 +18,7 @@ import { ImagePickerField } from "../media/ImagePickerField";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
+import type { DimensionSpec } from "../media/upload-specs";
 import type { GalleryItemOut } from "../../types/api";
 
 const GALLERY_QUERY_KEY = ["gallery-items"];
@@ -35,12 +36,14 @@ export function GalleryPanel({
   description,
   maxItems,
   limitMessage,
+  spec,
 }: {
   category?: string;
   title: string;
   description?: string;
   maxItems?: number;
   limitMessage?: string;
+  spec?: DimensionSpec;
 }) {
   const { hasRole } = useAuth();
   const canDelete = hasRole("owner", "admin");
@@ -201,6 +204,7 @@ export function GalleryPanel({
         item={editing}
         fixedCategory={category}
         nextDisplayOrder={orderedItems.length}
+        spec={spec}
         onSaved={() => {
           setFormOpen(false);
           void invalidate();
@@ -224,6 +228,7 @@ function GalleryPanelFormModal({
   item,
   fixedCategory,
   nextDisplayOrder,
+  spec,
   onSaved,
 }: {
   open: boolean;
@@ -231,6 +236,7 @@ function GalleryPanelFormModal({
   item: GalleryItemOut | null;
   fixedCategory?: string;
   nextDisplayOrder: number;
+  spec?: DimensionSpec;
   onSaved: () => void;
 }) {
   const { showToast } = useToast();
@@ -286,7 +292,7 @@ function GalleryPanelFormModal({
           mutation.mutate();
         }}
       >
-        <ImagePickerField label="Image" bucket="gallery" imageId={mediaId} onChange={setMediaId} />
+        <ImagePickerField label="Image" bucket="gallery" imageId={mediaId} onChange={setMediaId} spec={spec} />
         {!fixedCategory && (
           <Input
             label="Category tag"

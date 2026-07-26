@@ -7,7 +7,12 @@ import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 import { formatDateTime } from "../../lib/utils";
 import { VIDEO_GALLERY_QUERY_KEY } from "./video-gallery-query-key";
+import { UploadSpecHint } from "../media/UploadSpecHint";
+import { VIDEO_GALLERY_MAX_BYTES } from "../media/upload-limits";
+import type { DimensionSpec } from "../media/upload-specs";
 import type { VideoGalleryOut } from "../../types/api";
+
+const SHOWCASE_VIDEO_SPEC: DimensionSpec = { width: 1080, height: 1920, aspectLabel: "9:16", aspect: null, formats: "MP4 (H.264)" };
 
 function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -132,6 +137,7 @@ export function VideoGalleryCard({ video }: { video: VideoGalleryOut }) {
             Delete
           </Button>
         </div>
+        <UploadSpecHint maxBytes={VIDEO_GALLERY_MAX_BYTES} spec={SHOWCASE_VIDEO_SPEC} />
         {replaceProgress !== null && <p className="text-xs text-neutral-400">Uploading — {replaceProgress}%</p>}
       </CardBody>
 

@@ -18,6 +18,7 @@ import {
 import { SortableList } from "../../components/ui/SortableList";
 import { ImagePickerField } from "../media/ImagePickerField";
 import { mediaQueryKey } from "../media/media-query-key";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
@@ -269,7 +270,7 @@ function SpecialFormModal({
           value={price}
           onChange={(e) => setPrice(e.target.value)}
         />
-        <ImagePickerField label="Image" bucket="menu" imageId={imageId} onChange={setImageId} />
+        <ImagePickerField label="Image" bucket="menu" imageId={imageId} onChange={setImageId} spec={DIMENSION_SPECS.specialItem} />
       </form>
     </Modal>
   );

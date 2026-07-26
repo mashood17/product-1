@@ -3,7 +3,10 @@ import { ImagePlus, X } from "lucide-react";
 import { mediaApi } from "../../api/resources";
 import { mediaQueryKey } from "./media-query-key";
 import { useImageUpload } from "./useImageUpload";
+import { UploadSpecHint } from "./UploadSpecHint";
+import { BUCKET_MAX_BYTES } from "./upload-limits";
 import { Button, FieldShell } from "../../components/ui";
+import type { DimensionSpec } from "./upload-specs";
 import type { MediaBucket } from "../../types/api";
 
 /**
@@ -20,11 +23,13 @@ export function ImagePickerField({
   bucket,
   imageId,
   onChange,
+  spec,
 }: {
   label?: string;
   bucket: MediaBucket;
   imageId: string | null;
   onChange: (mediaId: string | null) => void;
+  spec?: DimensionSpec;
 }) {
   const { data } = useQuery({
     queryKey: mediaQueryKey(bucket),
@@ -32,7 +37,7 @@ export function ImagePickerField({
   });
 
   const current = imageId ? data?.items.find((m) => m.id === imageId) : undefined;
-  const { open, isUploading, progress, inputElement } = useImageUpload(bucket, (media) => onChange(media.id));
+  const { open, isUploading, progress, inputElement } = useImageUpload(bucket, (media) => onChange(media.id), spec);
 
   return (
     <FieldShell label={label}>
@@ -61,6 +66,7 @@ export function ImagePickerField({
           {isUploading && (
             <p className="text-xs text-neutral-400">Uploading{progress !== null ? ` — ${progress}%` : "…"}</p>
           )}
+          {spec && !isUploading && <UploadSpecHint maxBytes={BUCKET_MAX_BYTES[bucket]} spec={spec} />}
         </div>
       </div>
     </FieldShell>

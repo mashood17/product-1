@@ -3,6 +3,7 @@ import { siteContentApi } from "../../api/resources";
 import { PageHeader } from "../../components/ui";
 import { GalleryPanel } from "../shared/GalleryPanel";
 import { SectionImageCard } from "../shared/SectionImageCard";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 
@@ -39,12 +40,14 @@ export function StayPage() {
           value={siteContentByKey.get(INTRO_IMAGE_KEY)}
           onSave={(image) => saveSectionImage.mutate({ key: INTRO_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === INTRO_IMAGE_KEY}
+          spec={DIMENSION_SPECS.stay}
         />
         <GalleryPanel
           category="stay"
           title="Boutique Retreat & Gallery Images"
           maxItems={15}
           limitMessage="Maximum of 15 images allowed for the Stay Gallery. Please delete an existing image before uploading a new one."
+          spec={DIMENSION_SPECS.gallery}
         />
         <SectionImageCard
           label="Reserve Your Stay"
@@ -53,6 +56,7 @@ export function StayPage() {
           value={siteContentByKey.get(RESERVE_IMAGE_KEY)}
           onSave={(image) => saveSectionImage.mutate({ key: RESERVE_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === RESERVE_IMAGE_KEY}
+          spec={DIMENSION_SPECS.stay}
         />
       </div>
     </div>

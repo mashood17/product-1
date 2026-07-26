@@ -4,6 +4,7 @@ import { ErrorState, PageHeader } from "../../components/ui";
 import { SectionImageCard } from "../shared/SectionImageCard";
 import { HeroBackgroundSection } from "./HeroBackgroundSection";
 import { ReviewsSection } from "../reviews/ReviewsSection";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 
@@ -75,6 +76,7 @@ export function HomepagePage() {
                   value={byKey.get(config.key)}
                   onSave={(image) => saveMutation.mutate({ key: config.key, value: image })}
                   isSaving={saveMutation.isPending && saveMutation.variables?.key === config.key}
+                  spec={DIMENSION_SPECS.section}
                 />
               ))}
             </div>
@@ -88,6 +90,7 @@ export function HomepagePage() {
               value={byKey.get(ABOUT_IMAGE_KEY)}
               onSave={(image) => saveMutation.mutate({ key: ABOUT_IMAGE_KEY, value: image })}
               isSaving={saveMutation.isPending && saveMutation.variables?.key === ABOUT_IMAGE_KEY}
+              spec={DIMENSION_SPECS.section}
             />
           </div>
 

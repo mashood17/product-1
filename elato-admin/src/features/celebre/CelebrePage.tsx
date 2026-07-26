@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { siteContentApi } from "../../api/resources";
 import { PageHeader } from "../../components/ui";
 import { SectionImageCard } from "../shared/SectionImageCard";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 
@@ -34,6 +35,7 @@ export function CelebrePage() {
           value={siteContentByKey.get(GATHERINGS_IMAGE_KEY)}
           onSave={(image) => saveSectionImage.mutate({ key: GATHERINGS_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === GATHERINGS_IMAGE_KEY}
+          spec={DIMENSION_SPECS.section}
         />
       </div>
     </div>

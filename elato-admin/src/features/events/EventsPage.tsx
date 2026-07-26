@@ -27,6 +27,7 @@ import {
 import { ImagePickerField } from "../media/ImagePickerField";
 import { GalleryPanel } from "../shared/GalleryPanel";
 import { SectionImageCard } from "../shared/SectionImageCard";
+import { DIMENSION_SPECS } from "../media/upload-specs";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
@@ -101,12 +102,14 @@ export function EventsPage() {
           value={siteContentByKey.get(EXPERIENCE_IMAGE_KEY)}
           onSave={(image) => saveSectionImage.mutate({ key: EXPERIENCE_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === EXPERIENCE_IMAGE_KEY}
+          spec={DIMENSION_SPECS.event}
         />
         <GalleryPanel
           category="events"
           title="Events Gallery"
           maxItems={10}
           limitMessage="Maximum of 10 images allowed for the Events Gallery. Please delete an existing image before uploading a new one."
+          spec={DIMENSION_SPECS.gallery}
         />
         <SectionImageCard
           label="Plan Your Celebration"
@@ -115,6 +118,7 @@ export function EventsPage() {
           value={siteContentByKey.get(PLAN_IMAGE_KEY)}
           onSave={(image) => saveSectionImage.mutate({ key: PLAN_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === PLAN_IMAGE_KEY}
+          spec={DIMENSION_SPECS.event}
         />
       </div>
 
@@ -282,7 +286,7 @@ function EventFormModal({
           <Input label="Min guests" type="number" min={0} value={minGuests} onChange={(e) => setMinGuests(e.target.value)} />
           <Input label="Max guests" type="number" min={0} value={maxGuests} onChange={(e) => setMaxGuests(e.target.value)} />
         </div>
-        <ImagePickerField label="Image" bucket="events" imageId={imageId} onChange={setImageId} />
+        <ImagePickerField label="Image" bucket="events" imageId={imageId} onChange={setImageId} spec={DIMENSION_SPECS.event} />
         <Switch checked={isActive} onChange={setIsActive} label="Active" />
       </form>
     </Modal>

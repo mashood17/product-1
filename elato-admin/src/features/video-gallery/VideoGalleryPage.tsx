@@ -16,6 +16,11 @@ import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 import { VIDEO_GALLERY_QUERY_KEY } from "./video-gallery-query-key";
 import { VideoGalleryCard } from "./VideoGalleryCard";
+import { UploadSpecHint } from "../media/UploadSpecHint";
+import { VIDEO_GALLERY_MAX_BYTES } from "../media/upload-limits";
+import type { DimensionSpec } from "../media/upload-specs";
+
+const SHOWCASE_VIDEO_SPEC: DimensionSpec = { width: 1080, height: 1920, aspectLabel: "9:16", aspect: null, formats: "MP4 (H.264)" };
 
 const MAX_VIDEOS = 5;
 
@@ -211,14 +216,17 @@ function UploadVideoModal({ open, onClose, atCapacity }: { open: boolean; onClos
         )}
 
         {status === "idle" ? (
-          <FileDropzone
-            accept="video/mp4,video/webm"
-            hint="MP4 or WebM, under 30MB — uploaded at original quality. Upload starts immediately."
-            onFileSelected={(f) => {
-              setFile(f);
-              uploadMutation.mutate(f);
-            }}
-          />
+          <div className="flex flex-col gap-2">
+            <FileDropzone
+              accept="video/mp4,video/webm"
+              hint="MP4 or WebM, under 30MB — uploaded at original quality. Upload starts immediately."
+              onFileSelected={(f) => {
+                setFile(f);
+                uploadMutation.mutate(f);
+              }}
+            />
+            <UploadSpecHint maxBytes={VIDEO_GALLERY_MAX_BYTES} spec={SHOWCASE_VIDEO_SPEC} />
+          </div>
         ) : (
           <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 px-4 py-3.5">
             <div className="flex items-center justify-between gap-3">

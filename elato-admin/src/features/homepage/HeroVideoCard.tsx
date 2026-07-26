@@ -6,6 +6,12 @@ import { Button, Card, CardBody, CardHeader, ConfirmDialog, Modal, FileDropzone 
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 import { HERO_BACKGROUNDS_QUERY_KEY } from "./hero-background-query-key";
+import { UploadSpecHint } from "../media/UploadSpecHint";
+import { ImageCropDialog } from "../media/ImageCropDialog";
+import { matchesAspect, readImageDimensions } from "../media/crop-image";
+import { DIMENSION_SPECS } from "../media/upload-specs";
+import { BUCKET_MAX_BYTES, HERO_VIDEO_MAX_BYTES } from "../media/upload-limits";
+import type { DimensionSpec } from "../media/upload-specs";
 import type { HeroBackgroundOut, HeroSlot } from "../../types/api";
 
 function formatBytes(bytes: number): string {
@@ -35,7 +41,17 @@ export function HeroVideoCard({
   const [progress, setProgress] = useState<number | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [pendingPosterCrop, setPendingPosterCrop] = useState<{ file: File; imageSrc: string } | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
+
+  // The hero video itself has no fixed-ratio recommendation shown here beyond
+  // matching its poster's orientation — video never goes through the crop
+  // flow (see requirement #3), so `aspect` stays null.
+  const videoSpec: DimensionSpec =
+    slot === "desktop"
+      ? { width: 1920, height: 1080, aspectLabel: "16:9", aspect: null, formats: "MP4 (H.264)" }
+      : { width: 1080, height: 1920, aspectLabel: "9:16", aspect: null, formats: "MP4 (H.264)" };
+  const posterSpec = slot === "desktop" ? DIMENSION_SPECS.heroDesktop : DIMENSION_SPECS.heroMobile;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: HERO_BACKGROUNDS_QUERY_KEY });
 
@@ -117,6 +133,7 @@ export function HeroVideoCard({
               hint={data ? "Replace — MP4 or WebM, under 25MB, 20s or shorter" : "MP4 or WebM, under 25MB, 20s or shorter"}
               onFileSelected={(file) => uploadVideoMutation.mutate(file)}
             />
+            <UploadSpecHint maxBytes={HERO_VIDEO_MAX_BYTES} spec={videoSpec} />
             {progress !== null && <p className="text-xs text-neutral-400">Uploading — {progress}%</p>}
 
             {data && (
@@ -152,10 +169,20 @@ export function HeroVideoCard({
                     type="file"
                     accept="image/*"
                     className="sr-only"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) uploadPosterMutation.mutate(file);
                       e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const { width, height } = await readImageDimensions(file);
+                        if (posterSpec.aspect != null && !matchesAspect(width, height, posterSpec.aspect)) {
+                          setPendingPosterCrop({ file, imageSrc: URL.createObjectURL(file) });
+                          return;
+                        }
+                      } catch {
+                        // Couldn't probe dimensions — fall through to a direct upload.
+                      }
+                      uploadPosterMutation.mutate(file);
                     }}
                   />
                   <Button
@@ -174,6 +201,7 @@ export function HeroVideoCard({
                     Delete
                   </Button>
                 </div>
+                <UploadSpecHint maxBytes={BUCKET_MAX_BYTES.hero} spec={posterSpec} />
                 {!data.poster_url && (
                   <p className="text-xs text-amber-600">
                     No poster could be auto-generated for this video — add one so the hero has an instant placeholder
@@ -211,6 +239,25 @@ export function HeroVideoCard({
         onConfirm={() => removeMutation.mutate()}
         onCancel={() => setConfirmDeleteOpen(false)}
       />
+
+      {pendingPosterCrop && posterSpec.aspect != null && (
+        <ImageCropDialog
+          open
+          imageSrc={pendingPosterCrop.imageSrc}
+          fileName={pendingPosterCrop.file.name}
+          mimeType={pendingPosterCrop.file.type || "image/jpeg"}
+          aspect={posterSpec.aspect}
+          onCancel={() => {
+            URL.revokeObjectURL(pendingPosterCrop.imageSrc);
+            setPendingPosterCrop(null);
+          }}
+          onCropped={(croppedFile) => {
+            URL.revokeObjectURL(pendingPosterCrop.imageSrc);
+            setPendingPosterCrop(null);
+            uploadPosterMutation.mutate(croppedFile);
+          }}
+        />
+      )}
     </Card>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronUp, Eye, EyeOff, KeyRound, LogOut, X } from "lucide-react";
@@ -153,6 +153,14 @@ function ChangePasswordModal({
     setShowNew(false);
   };
 
+  const handleClose = useCallback(() => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setShowCurrent(false);
+    setShowNew(false);
+    onClose();
+  }, [onClose]);
+
   const mutation = useMutation({
     mutationFn: () => authApi.changePassword({ current_password: currentPassword, new_password: newPassword }),
     onSuccess: () => {
@@ -169,10 +177,7 @@ function ChangePasswordModal({
   return (
     <Modal
       open={open}
-      onClose={() => {
-        reset();
-        onClose();
-      }}
+      onClose={handleClose}
       title="Change password"
       footer={
         <>
