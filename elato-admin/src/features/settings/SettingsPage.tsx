@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { settingsApi } from "../../api/resources";
-import { ErrorState, PageHeader } from "../../components/ui";
+import { Card, CardBody, CardHeader, ErrorState, PageHeader, Switch } from "../../components/ui";
 import { KeyValueCard } from "../shared/KeyValueCard";
 import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
+import { humanizeKey } from "../../lib/utils";
+
+const FEATURE_FLAGS_KEY = "feature_flags";
 
 const EXPECTED_KEYS: { key: string; label: string; description: string; defaultValue: Record<string, unknown> }[] = [
   {
@@ -25,13 +28,37 @@ const EXPECTED_KEYS: { key: string; label: string; description: string; defaultV
     description: "Shown in the site footer.",
     defaultValue: { instagram: "", facebook: "", youtube: "" },
   },
-  {
-    key: "feature_flags",
-    label: "Feature flags",
-    description: "Toggle experimental or seasonal features on the public site.",
-    defaultValue: { maintenance_mode: false },
-  },
 ];
+
+function MaintenanceModeCard({
+  value,
+  onSave,
+  isSaving,
+}: {
+  value: unknown;
+  onSave: (value: unknown) => void;
+  isSaving?: boolean;
+}) {
+  const enabled =
+    typeof value === "object" && value !== null && (value as Record<string, unknown>).maintenance_mode === true;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Maintenance Mode"
+        description="When enabled, the public website will display a maintenance page and visitors cannot access the site."
+      />
+      <CardBody>
+        <Switch
+          checked={enabled}
+          onChange={(next) => onSave({ maintenance_mode: next })}
+          label={enabled ? "Enabled" : "Disabled"}
+          disabled={isSaving}
+        />
+      </CardBody>
+    </Card>
+  );
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -52,7 +79,9 @@ export function SettingsPage() {
   });
 
   const byKey = new Map((data ?? []).map((c) => [c.key, c.value]));
-  const extraKeys = (data ?? []).filter((c) => !EXPECTED_KEYS.some((e) => e.key === c.key));
+  const extraKeys = (data ?? []).filter(
+    (c) => c.key !== FEATURE_FLAGS_KEY && !EXPECTED_KEYS.some((e) => e.key === c.key),
+  );
 
   return (
     <div>
@@ -86,6 +115,12 @@ export function SettingsPage() {
             />
           ))}
 
+          <MaintenanceModeCard
+            value={byKey.get(FEATURE_FLAGS_KEY)}
+            onSave={(value) => saveMutation.mutate({ key: FEATURE_FLAGS_KEY, value })}
+            isSaving={saveMutation.isPending && saveMutation.variables?.key === FEATURE_FLAGS_KEY}
+          />
+
           {extraKeys.length > 0 && (
             <>
               <p className="mt-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Other settings keys</p>
@@ -93,7 +128,7 @@ export function SettingsPage() {
                 <KeyValueCard
                   key={entry.key}
                   keyName={entry.key}
-                  label={entry.key}
+                  label={humanizeKey(entry.key)}
                   value={entry.value}
                   defaultValue={{}}
                   onSave={(key, value) => saveMutation.mutate({ key, value })}

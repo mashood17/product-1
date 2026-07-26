@@ -9,7 +9,7 @@ export function MenuSearchBar({ onQueryChange }: { onQueryChange: (query: string
   }, [value, onQueryChange])
 
   return (
-    <div className="sticky top-20 z-30 bg-transparent py-4 backdrop-blur-md">
+    <div className="bg-transparent py-4 backdrop-blur-md">
       <div className="container-elato">
         <div className="relative mx-auto max-w-xl">
           <input

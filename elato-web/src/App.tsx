@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { Navbar } from './components/layout/Navbar'
 import { Footer } from './components/layout/Footer'
@@ -9,6 +9,8 @@ import { ScrollToTopButton } from './components/ui/ScrollToTopButton'
 import { ScratchOfferPopup } from './components/offers/ScratchOfferPopup'
 import { FloatingOfferButton } from './components/offers/FloatingOfferButton'
 import { PageTransitionProvider } from './lib/pageTransition'
+import { MaintenancePage } from './pages/MaintenancePage'
+import { apiGet } from './lib/apiClient'
 
 // Route-based code splitting (PRD Ch. 46.2) — each page ships as its own chunk.
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })))
@@ -22,6 +24,34 @@ const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage').then((m) 
 
 function RouteFallback() {
   return <div className="min-h-screen bg-surface-base" aria-hidden="true" />
+}
+
+// Gates the whole public site behind the admin-controlled maintenance flag
+// (settings key `feature_flags.maintenance_mode`). Checked once per load —
+// defaults to 'off' on any fetch failure so a backend hiccup never takes the
+// site down on its own.
+function useMaintenanceMode() {
+  const [enabled, setEnabled] = useState(false)
+  const [checked, setChecked] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    apiGet<{ enabled: boolean }>('/api/v1/maintenance-status')
+      .then((res) => {
+        if (!cancelled) setEnabled(res.enabled)
+      })
+      .catch(() => {
+        if (!cancelled) setEnabled(false)
+      })
+      .finally(() => {
+        if (!cancelled) setChecked(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return { enabled, checked }
 }
 
 // react-router's BrowserRouter never resets scroll on navigation — without
@@ -177,6 +207,11 @@ function ScrollPositionRestoration() {
 }
 
 function App() {
+  const { enabled: maintenanceMode, checked: maintenanceChecked } = useMaintenanceMode()
+
+  if (!maintenanceChecked) return <RouteFallback />
+  if (maintenanceMode) return <MaintenancePage />
+
   return (
     <ErrorBoundary>
       <BrowserRouter>

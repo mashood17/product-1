@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { dashboardApi } from "../../api/resources";
 import { Card, CardBody, CardHeader, ErrorState, PageHeader, StatCardSkeleton } from "../../components/ui";
 import { errorMessage } from "../../lib/query-client";
-import { formatDateTime } from "../../lib/utils";
+import { formatDateTime, humanizeKey } from "../../lib/utils";
 
 export function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -51,7 +51,7 @@ export function DashboardPage() {
                             <Activity className="h-3.5 w-3.5 text-accent-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-neutral-800">{group.event_name}</p>
+                            <p className="truncate text-sm font-medium text-neutral-800">{humanizeKey(group.event_name)}</p>
                             <p className="text-xs text-neutral-400">{formatDateTime(group.last_seen)}</p>
                           </div>
                         </div>
@@ -123,7 +123,7 @@ function AnalyticsMiniBars({ counts }: { counts: Record<string, number> }) {
       {entries.map(([name, count]) => (
         <li key={name}>
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="font-medium text-neutral-700">{name}</span>
+            <span className="font-medium text-neutral-700">{humanizeKey(name)}</span>
             <span className="text-neutral-400">{count}</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-neutral-100">

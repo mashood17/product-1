@@ -45,3 +45,33 @@ export function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "");
 }
+
+/** Known acronyms/brand names that should keep their own casing rather than being title-cased word by word. */
+const HUMANIZE_WORD_OVERRIDES: Record<string, string> = {
+  url: "URL",
+  urls: "URLs",
+  id: "ID",
+  ids: "IDs",
+  api: "API",
+  seo: "SEO",
+  html: "HTML",
+  cta: "CTA",
+  sms: "SMS",
+  faq: "FAQ",
+  whatsapp: "WhatsApp",
+};
+
+/** Turn a database-style key (snake_case, etc.) into a professional, human-readable label. */
+export function humanizeKey(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (HUMANIZE_WORD_OVERRIDES[lower]) return HUMANIZE_WORD_OVERRIDES[lower];
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}

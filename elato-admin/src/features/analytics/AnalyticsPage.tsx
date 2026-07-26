@@ -3,6 +3,7 @@ import { BarChart3 } from "lucide-react";
 import { dashboardApi } from "../../api/resources";
 import { Card, CardBody, CardHeader, EmptyState, ErrorState, PageHeader } from "../../components/ui";
 import { errorMessage } from "../../lib/query-client";
+import { humanizeKey } from "../../lib/utils";
 
 export function AnalyticsPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -46,7 +47,7 @@ export function AnalyticsPage() {
               <ul className="flex flex-col gap-4">
                 {entries.map(([name, count]) => (
                   <li key={name} className="flex items-center gap-4">
-                    <div className="w-32 shrink-0 truncate text-sm font-medium text-neutral-800">{name}</div>
+                    <div className="w-48 shrink-0 text-sm font-medium text-neutral-800">{humanizeKey(name)}</div>
                     <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-600 transition-all"

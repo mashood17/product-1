@@ -33,10 +33,14 @@ export function GalleryPanel({
   category,
   title,
   description,
+  maxItems,
+  limitMessage,
 }: {
   category?: string;
   title: string;
   description?: string;
+  maxItems?: number;
+  limitMessage?: string;
 }) {
   const { hasRole } = useAuth();
   const canDelete = hasRole("owner", "admin");
@@ -61,6 +65,16 @@ export function GalleryPanel({
   const [deleteTarget, setDeleteTarget] = useState<GalleryItemOut | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: GALLERY_QUERY_KEY });
+
+  const limitReached = maxItems !== undefined && scoped.length >= maxItems;
+  const openAddForm = () => {
+    if (limitReached) {
+      showToast({ title: "Upload limit reached", description: limitMessage, variant: "error" });
+      return;
+    }
+    setEditing(null);
+    setFormOpen(true);
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => galleryApi.remove(id),
@@ -88,16 +102,12 @@ export function GalleryPanel({
     <Card>
       <CardHeader
         title={title}
-        description={description ?? `${scoped.length} photo${scoped.length === 1 ? "" : "s"} · drag to reorder`}
+        description={
+          description ??
+          `${scoped.length} photo${scoped.length === 1 ? "" : "s"} · drag to reorder${maxItems ? ` · Maximum ${maxItems} images.` : ""}`
+        }
         actions={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
+          <Button size="sm" variant="outline" onClick={openAddForm}>
             <Plus className="h-3.5 w-3.5" /> Add photo
           </Button>
         }
@@ -113,7 +123,7 @@ export function GalleryPanel({
             title="No photos yet"
             description="Add photos to build out this gallery."
             action={
-              <Button size="sm" onClick={() => setFormOpen(true)}>
+              <Button size="sm" onClick={openAddForm}>
                 <Plus className="h-3.5 w-3.5" /> Add photo
               </Button>
             }

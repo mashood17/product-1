@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { MenuSearchBar } from './menu/MenuSearchBar'
+import { CategoryFilterBar } from './menu/CategoryFilterBar'
 import { CategoryRow } from './menu/CategoryRow'
 import { SearchResultsGrid } from './menu/SearchResultsGrid'
 import { ItemDetailModal } from './menu/ItemDetailModal'
@@ -15,6 +16,7 @@ export function MenuSection() {
   const [menuItems, setMenuItems] = useState<MenuItem[] | null>(null)
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MenuItem[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   const [openItemId, setOpenItemId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -68,8 +70,22 @@ export function MenuSection() {
     return map
   }, [menuItems])
 
+  const visibleCategories = useMemo(() => {
+    if (!categories || !selectedCategoryId) return categories
+    return categories.filter((c) => c.id === selectedCategoryId)
+  }, [categories, selectedCategoryId])
+
+  const visibleSearchResults = useMemo(() => {
+    if (!selectedCategoryId) return searchResults
+    return searchResults.filter((item) => item.categoryId === selectedCategoryId)
+  }, [searchResults, selectedCategoryId])
+
   return (
-    <motion.section id="menu" className="relative overflow-hidden">
+    <motion.section id="menu" className="relative">
+      {/* No overflow-hidden here (removed) — these bg layers are exact
+          inset-0 with no transform, so nothing bleeds without clipping,
+          and an ancestor with overflow != visible would otherwise break
+          position:sticky for the search bar / category filter bar below. */}
       <div className="absolute inset-0 -z-10 bg-cover bg-center sm:hidden" style={{ backgroundImage: `url(${bgMobile})` }} aria-hidden="true" />
       <div className="absolute inset-0 -z-10 hidden bg-cover bg-center sm:block" style={{ backgroundImage: `url(${bgDesktop})` }} aria-hidden="true" />
 
@@ -84,10 +100,18 @@ export function MenuSection() {
 
       <MenuSearchBar onQueryChange={setQuery} />
 
+      {categories && categories.length > 0 && (
+        <CategoryFilterBar
+          categories={categories}
+          selectedId={selectedCategoryId}
+          onSelect={setSelectedCategoryId}
+        />
+      )}
+
       <div className="container-elato">
         {query ? (
           <SearchResultsGrid
-            items={searchResults}
+            items={visibleSearchResults}
             loading={searching}
             query={query}
             onOpenItem={setOpenItemId}
@@ -114,8 +138,8 @@ export function MenuSection() {
             Loading the menu…
           </motion.p>
         ) : (
-          <div className="divide-y divide-primary-100">
-            {categories.map((category, i) => (
+          <div key={selectedCategoryId ?? 'all'} className="divide-y divide-primary-100">
+            {(visibleCategories ?? []).map((category, i) => (
               <CategoryRow
                 key={category.id}
                 category={category}

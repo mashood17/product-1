@@ -43,7 +43,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, label, hint, error, id, required, ...props },
+  { className, label, hint, error, id, required, onWheel, ...props },
   ref,
 ) {
   const inputId = id ?? props.name;
@@ -55,6 +55,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={cn(baseControlClasses, error && "border-red-400 focus:border-red-500", className)}
         aria-invalid={!!error || undefined}
         required={required}
+        onWheel={
+          props.type === "number"
+            ? (e) => {
+                e.currentTarget.blur();
+                onWheel?.(e);
+              }
+            : onWheel
+        }
         {...props}
       />
     </FieldShell>

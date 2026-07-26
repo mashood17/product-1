@@ -6,6 +6,7 @@ only ever select active/public rows — mirrors the RLS policies in migration
 
 from fastapi import APIRouter, Query, Request, Response
 
+from app.core.exceptions import NotFoundError
 from app.repositories import (
     category_repository,
     enquiry_repository,
@@ -15,6 +16,7 @@ from app.repositories import (
     menu_item_repository,
     review_repository,
     room_repository,
+    settings_repository,
     site_content_repository,
     special_repository,
     video_gallery_repository,
@@ -37,6 +39,17 @@ from app.schemas.special import SpecialOut
 from app.schemas.video_gallery import VideoGalleryOut
 
 router = APIRouter(prefix="", tags=["public"])
+
+
+@router.get("/maintenance-status")
+def get_maintenance_status() -> dict[str, bool]:
+    # No cache header — a maintenance toggle must take effect on the next
+    # page load, not be held behind a CDN/browser TTL.
+    try:
+        flags = settings_repository.get("feature_flags")["value"]
+    except NotFoundError:
+        return {"enabled": False}
+    return {"enabled": bool(isinstance(flags, dict) and flags.get("maintenance_mode"))}
 
 
 @router.get("/site-content", response_model=list[SiteContentOut])

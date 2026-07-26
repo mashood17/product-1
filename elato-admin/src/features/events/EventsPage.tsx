@@ -102,7 +102,12 @@ export function EventsPage() {
           onSave={(image) => saveSectionImage.mutate({ key: EXPERIENCE_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === EXPERIENCE_IMAGE_KEY}
         />
-        <GalleryPanel category="events" title="Events Gallery" />
+        <GalleryPanel
+          category="events"
+          title="Events Gallery"
+          maxItems={10}
+          limitMessage="Maximum of 10 images allowed for the Events Gallery. Please delete an existing image before uploading a new one."
+        />
         <SectionImageCard
           label="Plan Your Celebration"
           description="Image for the enquiry call-to-action."

@@ -52,3 +52,8 @@ def delete(item_id: str) -> None:
 def count_all() -> int:
     res = client().table(TABLE).select("id", count="exact").execute()
     return res.count or 0
+
+
+def count_by_category(category: str) -> int:
+    res = client().table(TABLE).select("id", count="exact").eq("category", category).execute()
+    return res.count or 0

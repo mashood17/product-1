@@ -57,20 +57,30 @@ export const CategoryRow = memo(function CategoryRow({
   const y = useTransform(scrollYProgress, [0, 1], ['-8%', '8%'])
 
   return (
-    <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={viewportOnce}
-      variants={sectionReveal}
-      className="py-16 lg:py-24"
-    >
+    // Plain div, not a motion component — a `y`-animated ancestor sets an
+    // inline `transform` (Framer keeps it even at rest, at y:0), and any
+    // transformed ancestor redefines the containing block for a
+    // `position: sticky` descendant. The sticky image column below only
+    // exists at `lg:` (mobile renders it `display:none`), which is exactly
+    // why this only broke on desktop: scrolling repeatedly reconciled the
+    // sticky image against a transformed ancestor, reading as a fade/glitch.
+    // Each column now carries its own entrance reveal instead, so neither
+    // motion wrapper sits between the sticky element and its true containing
+    // block (the scroll viewport).
+    <div className="py-16 lg:py-24">
       <div
         ref={rowRef}
         className={`grid grid-cols-1 items-start gap-12 lg:grid-cols-2 lg:gap-20 ${
           reversed ? 'lg:[&>*:first-child]:order-2' : ''
         }`}
       >
-        <div ref={columnRef}>
+        <motion.div
+          ref={columnRef}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportOnce}
+          variants={sectionReveal}
+        >
           <h3 className="text-h2 font-sans font-bold text-[#9e7641]">{category.name}</h3>
           <p className="text-body mt-3 max-w-md text-neutral-warm-500">{category.description}</p>
 
@@ -79,23 +89,25 @@ export const CategoryRow = memo(function CategoryRow({
               <MenuItemRow key={item.id} item={item} onOpen={onOpenItem} />
             ))}
           </div>
-        </div>
+        </motion.div>
 
         <div className="hidden lg:sticky lg:top-28 lg:block" style={{ marginTop: imageOffset }}>
-          <motion.div
-            style={{ y, willChange: 'transform' }}
-            className={`relative aspect-[4/3] w-full overflow-hidden rounded-3xl shadow-elato-xl ring-1 ring-black/5 bg-gradient-to-br ${gradients[index % gradients.length]}`}
-            aria-hidden="true"
-          >
-            {category.imageUrl && (
-              <img src={category.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-            )}
-            <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-lg" />
-            <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-secondary-900/15 blur-lg" />
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-transparent" />
+          <motion.div initial="hidden" whileInView="visible" viewport={viewportOnce} variants={sectionReveal}>
+            <motion.div
+              style={{ y, willChange: 'transform' }}
+              className={`relative aspect-[4/3] w-full overflow-hidden rounded-3xl shadow-elato-xl ring-1 ring-black/5 bg-gradient-to-br ${gradients[index % gradients.length]}`}
+              aria-hidden="true"
+            >
+              {category.imageUrl && (
+                <img src={category.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+              )}
+              <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-lg" />
+              <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-secondary-900/15 blur-lg" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-transparent" />
+            </motion.div>
           </motion.div>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 })

@@ -40,7 +40,12 @@ export function StayPage() {
           onSave={(image) => saveSectionImage.mutate({ key: INTRO_IMAGE_KEY, value: image })}
           isSaving={saveSectionImage.isPending && saveSectionImage.variables?.key === INTRO_IMAGE_KEY}
         />
-        <GalleryPanel category="stay" title="Boutique Retreat & Gallery Images" />
+        <GalleryPanel
+          category="stay"
+          title="Boutique Retreat & Gallery Images"
+          maxItems={15}
+          limitMessage="Maximum of 15 images allowed for the Stay Gallery. Please delete an existing image before uploading a new one."
+        />
         <SectionImageCard
           label="Reserve Your Stay"
           description="Image for the booking call-to-action."
