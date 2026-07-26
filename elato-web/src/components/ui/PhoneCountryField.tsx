@@ -11,6 +11,11 @@ interface PhoneCountryFieldProps {
   onBlur: () => void
   error?: string
   placeholder?: string
+  /** Overrides the phone input's default className — used by callers (e.g. the
+   * scratch-card offer form) that need the input to match another field's
+   * exact styling (text/placeholder color, focus behavior) rather than this
+   * component's default light theme. */
+  inputClassName?: string
 }
 
 /**
@@ -30,6 +35,7 @@ export function PhoneCountryField({
   onBlur,
   error,
   placeholder = '98765 43210',
+  inputClassName,
 }: PhoneCountryFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -66,7 +72,10 @@ export function PhoneCountryField({
             placeholder={placeholder}
             maxLength={14}
             aria-describedby={error ? `${idPrefix}-phone-error` : undefined}
-            className="h-12 w-full rounded-xl border border-[#9e7641]/25 bg-surface-base/60 pl-10 pr-4 text-body transition-colors focus-visible:border-[#9e7641] focus-visible:bg-surface-base"
+            className={
+              inputClassName ??
+              'h-12 w-full rounded-xl border border-[#9e7641]/25 bg-surface-base/60 pl-10 pr-4 text-body transition-colors focus-visible:border-[#9e7641] focus-visible:bg-surface-base'
+            }
           />
         </div>
       </div>

@@ -67,7 +67,7 @@ export const CategoryRow = memo(function CategoryRow({
     // Each column now carries its own entrance reveal instead, so neither
     // motion wrapper sits between the sticky element and its true containing
     // block (the scroll viewport).
-    <div className="py-16 lg:py-24">
+    <div id={`menu-category-${category.id}`} data-category-id={category.id} className="py-16 lg:py-24">
       <div
         ref={rowRef}
         className={`grid grid-cols-1 items-start gap-12 lg:grid-cols-2 lg:gap-20 ${

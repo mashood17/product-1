@@ -69,10 +69,12 @@ def get_site_content(key: str):
 
 
 @router.get("/hero-backgrounds", response_model=list[HeroBackgroundOut])
-def list_hero_backgrounds(response: Response):
-    # Admin-managed hero videos change rarely — safe to cache briefly rather
-    # than hit Supabase/Storage on every homepage load.
-    response.headers["Cache-Control"] = "public, max-age=300"
+def list_hero_backgrounds():
+    # No cache header, deliberately — same reasoning as /video-gallery: a
+    # freshly uploaded hero video must appear on the very next page load,
+    # not stay hidden behind a browser/CDN TTL. (Previously cached for 300s,
+    # which was the actual cause of "upload finishes but video takes minutes
+    # to show up" — the encode pipeline itself was never the bottleneck.)
     return [hero_video_service.to_schema(row) for row in hero_background_repository.list_all()]
 
 
