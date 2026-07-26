@@ -99,7 +99,7 @@ export function AvailOfferForm({ offerId, buttonText, onSuccess, onAlreadyClaime
         )}
       </div>
 
-      <div className="[&_label]:text-[#e7caa0]/70 [&_input]:h-12 [&_input]:rounded-xl [&_input]:border-[#E7CAA0]/25 [&_input]:bg-white/5 [&_input]:text-[#f5ead9] [&_select]:h-12 [&_select]:rounded-xl [&_select]:border-[#E7CAA0]/25 [&_select]:bg-white/5 [&_select]:text-[#f5ead9] [&_svg]:text-[#E7CAA0]/60">
+      <div className="[&_label]:text-[#e7caa0]/70 [&_input]:h-12 [&_input]:rounded-xl [&_input]:border-[#E7CAA0]/25 [&_input]:bg-white/5 [&_input]:text-[#f5ead9] [&_select]:h-12 [&_select]:rounded-xl [&_select]:border-[#E7CAA0]/25 [&_select]:bg-white/5 [&_select]:text-[#f5ead9] [&_svg]:text-[#E7CAA0]/60 [&_input:-webkit-autofill]:[-webkit-text-fill-color:#f5ead9] [&_input:-webkit-autofill]:[transition:background-color_9999s_ease-in-out_0s] [&_input:-webkit-autofill]:shadow-[0_0_0px_1000px_#2b2116_inset]">
         <PhoneCountryField
           idPrefix="offer"
           label="Phone Number"
