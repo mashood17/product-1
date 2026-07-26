@@ -114,7 +114,7 @@ export function HeroVideoCard({
             <FileDropzone
               accept="video/mp4,video/webm"
               disabled={busy}
-              hint={data ? "Replace — MP4 or WebM, under 40MB, 20s or shorter" : "MP4 or WebM, under 40MB, 20s or shorter"}
+              hint={data ? "Replace — MP4 or WebM, under 25MB, 20s or shorter" : "MP4 or WebM, under 25MB, 20s or shorter"}
               onFileSelected={(file) => uploadVideoMutation.mutate(file)}
             />
             {progress !== null && <p className="text-xs text-neutral-400">Uploading — {progress}%</p>}

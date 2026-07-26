@@ -7,6 +7,28 @@ import { errorMessage } from "../../lib/query-client";
 import { mediaQueryKey } from "./media-query-key";
 import type { MediaBucket, MediaOut } from "../../types/api";
 
+// Mirrors the server-side per-bucket caps in
+// elato-backend/app/services/media_service.py's `_BUCKET_MAX_BYTES` — kept
+// in sync manually since the two apps don't share a build. Purely a UX
+// shortcut: rejecting an oversized file here saves the round-trip to the
+// server, which enforces the same limit regardless.
+const BUCKET_MAX_BYTES: Record<MediaBucket, number> = {
+  hero: 3 * 1024 * 1024,
+  gallery: 1 * 1024 * 1024,
+  menu: 512 * 1024,
+  categories: 512 * 1024,
+  reviews: 512 * 1024,
+  logos: 1 * 1024 * 1024,
+  "public-assets": 1 * 1024 * 1024,
+  events: 1 * 1024 * 1024,
+  stay: 1 * 1024 * 1024,
+  uploads: 1 * 1024 * 1024,
+};
+
+function formatLimit(maxBytes: number): string {
+  return maxBytes < 1024 * 1024 ? `${Math.round(maxBytes / 1024)}KB` : `${Math.round(maxBytes / (1024 * 1024))}MB`;
+}
+
 /**
  * Direct-to-device upload: opening the native file picker and uploading
  * whatever's selected immediately — no "browse previously uploaded images"
@@ -41,7 +63,18 @@ export function useImageUpload(bucket: MediaBucket, onUploaded: (media: MediaOut
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) mutation.mutate(file);
+    if (file) {
+      const maxBytes = BUCKET_MAX_BYTES[bucket];
+      if (file.size > maxBytes) {
+        showToast({
+          title: "Image too large",
+          description: `This category accepts images up to ${formatLimit(maxBytes)} — please resize and try again.`,
+          variant: "error",
+        });
+      } else {
+        mutation.mutate(file);
+      }
+    }
     e.target.value = "";
   }
 

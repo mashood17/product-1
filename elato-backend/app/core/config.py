@@ -36,20 +36,18 @@ class Settings(BaseSettings):
 
     whatsapp_business_number: str = Field(default="+919731400313", alias="WHATSAPP_BUSINESS_NUMBER")
 
-    # Max accepted upload size, in bytes. This is only a resource-exhaustion
-    # guard, not a quality gate: the media pipeline downscales and re-encodes
-    # every image to web-sized WebP/JPEG/AVIF variants, so admins can upload
-    # ordinary high-resolution phone/DSLR photography (typically 5-30MB)
-    # without pre-compressing. Raise via env if genuinely larger sources are
-    # expected. Defaults to 50MB.
-    max_upload_bytes: int = Field(default=50 * 1024 * 1024, alias="MAX_UPLOAD_BYTES")
+    # Per-bucket image size caps (app/services/media_service.py's
+    # `_BUCKET_MAX_BYTES`) replaced a single blanket image upload limit here —
+    # admins are expected to upload web-ready photos already close to those
+    # caps rather than raw phone/DSLR originals for the server to compress
+    # down. Nothing in the image pipeline reads a setting for this anymore.
 
-    # Same resource-exhaustion-guard role as max_upload_bytes, but sized for
-    # video rather than photos. Admins are expected to upload already-
-    # reasonable hero clips (this pipeline stores the file as-is — see
-    # app/services/hero_video_service.py); raise via env if genuinely larger
-    # sources are expected.
-    hero_video_max_bytes: int = Field(default=40 * 1024 * 1024, alias="HERO_VIDEO_MAX_BYTES")
+    # Resource-exhaustion guard for hero background videos. No transcoding
+    # happens (this pipeline stores the file as-is — see
+    # app/services/hero_video_service.py), so this is also the effective
+    # quality/size ceiling admins see, not just a safety cap. Raise via env
+    # if genuinely larger sources are expected.
+    hero_video_max_bytes: int = Field(default=25 * 1024 * 1024, alias="HERO_VIDEO_MAX_BYTES")
 
     # Password reset emails — Supabase Auth's built-in email sender (see
     # app/services/auth_service.py for the reasoning behind this choice).

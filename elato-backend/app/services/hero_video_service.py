@@ -1,22 +1,26 @@
 """
 Admin-managed hero background videos (desktop + mobile slots).
 
-Validates -> transcodes to a compressed, web-delivery H.264 MP4 (via a
-bundled static ffmpeg binary, see `_transcode_to_h264`) -> stores the
-transcoded file in Supabase Storage -> probes duration/dimensions and
-extracts a poster frame via PyAV (which bundles its own decoder libraries,
-so no *separate* system ffmpeg install is required for that half).
+Validates -> transcodes *only if the source isn't already browser-delivery
+compatible* -> stores the result in Supabase Storage -> probes duration/
+dimensions and extracts a poster frame via PyAV (which bundles its own
+decoder libraries, so no system ffmpeg install is required for that half).
 
-The uploaded source is never stored as-is: admins can upload straight off a
-phone/DSLR/screen-recording (whatever they have) without pre-compressing —
-every upload is re-encoded to a small, quality-targeted MP4 before it ever
-reaches Storage, so a heavy source file never becomes a heavy delivered file.
+Conditional transcode, not "always" or "never": a source that's already an
+MP4 container with an H.264 video stream (and either no audio or AAC audio)
+is already exactly what every browser hero-video consumer needs, so it's
+validated and uploaded as-is — re-encoding it would only cost CPU for no
+benefit. A source in any other container/codec (WebM/VP9, MOV/HEVC off an
+iPhone, etc.) gets transcoded to H.264 MP4 via a bundled static ffmpeg
+binary, same as before, so playback compatibility is never in question. The
+25MB size cap (`get_settings().hero_video_max_bytes`) still guards CPU/RAM
+on the transcode path regardless of which branch a given upload takes.
 
 Everything here is disk-backed, not RAM-backed: the incoming upload is
 stream-copied to a temp file (never held as one big `bytes` object), ffmpeg
-reads/writes temp files directly, and the compressed result is uploaded to
-Supabase straight from an open file handle. This matters on a memory-
-constrained Render instance — see the module-level comment on
+(when it runs) reads/writes temp files directly, and the stored result is
+uploaded from an open file handle. This matters on a memory-constrained
+Render instance — see the module-level comment on
 `_process_and_upload_hero_video` for the incident this was fixed after.
 
 Deliberately structured so that changes: everything that inspects or
@@ -36,10 +40,9 @@ import subprocess
 import tempfile
 import time
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Protocol
+from typing import Any, Protocol
 
 import imageio_ffmpeg
 from fastapi import UploadFile
@@ -49,54 +52,13 @@ from app.core.exceptions import AppError
 from app.db import get_supabase
 from app.repositories import hero_background_repository
 from app.services import media_service
+from app.utils.perf import current_rss_kb, timed_step
 
 logger = logging.getLogger("elato.hero_video")
 
 
-def _current_rss_kb() -> int | None:
-    """Current process RSS in kB, read straight from `/proc/self/status`
-    (the kernel's own live figure — what the OOM killer actually acts on),
-    not `resource.getrusage().ru_maxrss` (a monotonic high-water mark that
-    only ever grows and can't show memory being released). Linux-only by
-    construction (`/proc` doesn't exist elsewhere); returns None off Linux —
-    e.g. local Windows/macOS dev — so instrumentation degrades silently
-    instead of breaking non-production runs. Render's containers are Linux,
-    so this is live data in the environment that actually OOMs."""
-    try:
-        with open("/proc/self/status", "rb") as f:
-            for line in f:
-                if line.startswith(b"VmRSS:"):
-                    return int(line.split()[1])  # kB, per /proc(5)
-    except (OSError, IndexError, ValueError):
-        return None
-    return None
-
-
-@contextmanager
-def _timed_step(step: str, slot: str) -> Iterator[None]:
-    """Logs how long one pipeline step took, so a slow upload can be
-    diagnosed from the logs alone (which step, not just "it was slow").
-    Also logs process RSS immediately before and after the step, and the
-    delta between them, so a memory spike can be attributed to a specific
-    step from production logs alone — this is what the Render OOM
-    investigation (see `_process_and_upload_hero_video`'s docstring) needed
-    but didn't have. Uses try/finally (not try/except) so both duration and
-    RSS are logged whether the step succeeds *or* raises — a step that fails
-    partway through is exactly the case worth measuring, not one to skip.
-    Never alters control flow: any exception raised inside the `with` block
-    propagates unchanged after logging."""
-    start = time.perf_counter()
-    rss_before = _current_rss_kb()
-    try:
-        yield
-    finally:
-        duration_ms = (time.perf_counter() - start) * 1000
-        rss_after = _current_rss_kb()
-        rss_delta = rss_after - rss_before if (rss_before is not None and rss_after is not None) else None
-        logger.info(
-            f"[hero_video_upload] slot={slot} step={step} duration_ms={duration_ms:.1f} "
-            f"rss_before_kb={rss_before} rss_after_kb={rss_after} rss_delta_kb={rss_delta}"
-        )
+def _timed_step(step: str, slot: str):
+    return timed_step(logger, f"hero_video_upload slot={slot}", step)
 
 
 VIDEO_BUCKET = "hero-videos"
@@ -109,14 +71,22 @@ _MAX_DURATION_SECONDS = 20
 _MIN_DIMENSION = 480
 _MAX_DIMENSION = 3840
 
-# Delivery profile per slot — hero videos are decorative, always muted, and
-# looped, so there is no reason to ship source resolution/bitrate. CRF
-# (quality-targeted, not a fixed bitrate) means output size tracks actual
-# scene complexity: a simple static shot compresses far below this, a busy
-# one only spends bits where they're visible. "mobile" gets a lower cap and
-# a slightly higher CRF on top of that, since it's already the
-# smaller-by-design slot and is disproportionately likely to be on a
-# constrained connection.
+# A source already in this shape needs no transcode: MP4 container, H.264
+# video, and either no audio track or an AAC one. Anything else (WebM/VP9,
+# a phone's HEVC/MOV export, MP3/PCM audio, etc.) falls through to
+# `_transcode_to_h264` for guaranteed browser playback.
+_COMPATIBLE_VIDEO_CODECS = {"h264"}
+_COMPATIBLE_AUDIO_CODECS = {"aac"}
+
+# Delivery profile per slot, used only on the transcode fallback path (a
+# source that's already compatible is stored as-is, at its own resolution).
+# Hero videos are decorative, always muted, and looped, so there is no
+# reason to ship source resolution/bitrate when a transcode is already
+# happening anyway. CRF (quality-targeted, not a fixed bitrate) means output
+# size tracks actual scene complexity. "mobile" gets a lower cap and a
+# slightly higher CRF on top of that, since it's already the smaller-by-
+# design slot and is disproportionately likely to be on a constrained
+# connection.
 _COMPRESSION_PROFILES: dict[str, dict[str, int]] = {
     "desktop": {"max_dimension": 1920, "crf": 26},
     "mobile": {"max_dimension": 1080, "crf": 28},
@@ -138,14 +108,8 @@ _TRANSCODE_TIMEOUT_SECONDS = 180
 # Applied on BOTH sides of the pipeline: an input-context `-threads` (before
 # `-i`, bounds the *decoder*) and an output-context `-threads` (after `-c:v`,
 # bounds the *encoder*) are two independent ffmpeg option groups — setting
-# one does not set the other. A prior version of this constant only bounded
-# the encoder; the decoder was left on ffmpeg's auto-detected thread count,
-# and for admin-uploaded phone footage (source resolution up to
-# `_MAX_DIMENSION`, i.e. up to 4K) frame-threaded decoding allocates one full
-# decoded-frame buffer per thread — at 4K that's ~12MB/frame, so an
-# auto-detected 8-16 threads is another 100-200MB the encoder-side fix never
-# touched. That gap is the leading suspect for the Render OOM this constant's
-# other half was already fixed for.
+# one does not set the other. `-filter_threads` gets the same cap for the
+# same reason, for the `scale` filter in between.
 _ENCODE_THREADS = 2
 
 
@@ -154,11 +118,14 @@ class VideoProbe:
     width: int | None = None
     height: int | None = None
     duration_seconds: float | None = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
+    has_audio: bool = False
     poster_jpeg: bytes | None = None
 
 
 class VideoProcessor(Protocol):
-    def probe(self, path: str, *, include_poster: bool = True) -> VideoProbe: ...
+    def probe(self, path: str) -> VideoProbe: ...
 
 
 class PyAvProbe:
@@ -171,16 +138,11 @@ class PyAvProbe:
     simply skipped, and the admin can upload a poster image manually via the
     fallback endpoint.
 
-    `include_poster` lets a caller skip the decode-a-frame-and-JPEG-encode-it
-    step when only metadata (width/height/duration) is needed. The pipeline
-    probes twice — once on the *source* upload for validation, once on the
-    *compressed* output for the poster that's actually stored — and only the
-    second call's poster is ever used, so decoding one on the source call
-    too was pure waste: on a large admin-uploaded source (up to
-    `_MAX_DIMENSION`, i.e. up to 4K) that's a full-resolution frame decode +
-    JPEG encode thrown away every single upload."""
+    Also reports the video/audio codec names (`video_codec`/`audio_codec`)
+    so `_process_and_upload_hero_video` can decide whether a source is
+    already browser-delivery compatible and skip transcoding it."""
 
-    def probe(self, path: str, *, include_poster: bool = True) -> VideoProbe:
+    def probe(self, path: str) -> VideoProbe:
         try:
             import av
         except ImportError:
@@ -194,6 +156,10 @@ class PyAvProbe:
                     return VideoProbe()
 
                 width, height = stream.width, stream.height
+                video_codec = stream.codec_context.name if stream.codec_context else None
+
+                audio_stream = next((s for s in container.streams if s.type == "audio"), None)
+                audio_codec = audio_stream.codec_context.name if audio_stream and audio_stream.codec_context else None
 
                 duration_seconds: float | None = None
                 if stream.duration and stream.time_base:
@@ -202,16 +168,21 @@ class PyAvProbe:
                     duration_seconds = container.duration / 1_000_000
 
                 poster_jpeg = None
-                if include_poster:
-                    try:
-                        for frame in container.decode(stream):
-                            poster_jpeg = _frame_to_jpeg(frame)
-                            break
-                    except Exception:
-                        poster_jpeg = None
+                try:
+                    for frame in container.decode(stream):
+                        poster_jpeg = _frame_to_jpeg(frame)
+                        break
+                except Exception:
+                    poster_jpeg = None
 
                 return VideoProbe(
-                    width=width, height=height, duration_seconds=duration_seconds, poster_jpeg=poster_jpeg
+                    width=width,
+                    height=height,
+                    duration_seconds=duration_seconds,
+                    video_codec=video_codec,
+                    audio_codec=audio_codec,
+                    has_audio=audio_stream is not None,
+                    poster_jpeg=poster_jpeg,
                 )
             finally:
                 container.close()
@@ -229,20 +200,20 @@ def _frame_to_jpeg(frame: Any) -> bytes:
     return buf.getvalue()
 
 
-_processor: VideoProcessor = PyAvProbe()
-
-
-def _sniff_video_mime_at_path(path: Path) -> str:
-    # Reads only the first 12 bytes off disk — checked against real file
-    # content, not the filename/extension, same rule the image pipeline
-    # (media_service._sniff_image_type) follows. Never loads the full file.
-    with open(path, "rb") as f:
-        header = f.read(12)
-    if len(header) >= 8 and header[4:8] == b"ftyp":
-        return "video/mp4"
-    if header[:4] == b"\x1a\x45\xdf\xa3":
-        return "video/webm"
-    raise AppError(code="invalid_file", message="File is not a recognized MP4 or WebM video.", status_code=422)
+def _needs_transcode(mime: str, probe: VideoProbe) -> bool:
+    """True unless the source is already exactly what every browser hero-
+    video consumer needs: an MP4 container, an H.264 video stream, and
+    either no audio track or an AAC one. `probe.video_codec`/`audio_codec`
+    come from PyAV reading the real stream headers, not the container
+    extension, so a `.mp4` file with e.g. HEVC video still correctly falls
+    through to a transcode."""
+    if mime != "video/mp4":
+        return True
+    if probe.video_codec not in _COMPATIBLE_VIDEO_CODECS:
+        return True
+    if probe.has_audio and probe.audio_codec not in _COMPATIBLE_AUDIO_CODECS:
+        return True
+    return False
 
 
 class VideoTranscodeError(Exception):
@@ -254,15 +225,18 @@ class VideoTranscodeError(Exception):
 def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
     """Synchronous and CPU-bound — every caller must run this via
     `asyncio.to_thread` (or similar), never call it directly from an `async
-    def` route/service. Re-encodes to H.264 MP4 via the static ffmpeg binary
-    `imageio-ffmpeg` bundles in its wheel (no system `apt install ffmpeg` —
-    works the same on Render's build image as it does locally). Reads
-    `source_path` and writes `out_path` directly — ffmpeg does its own
-    disk I/O as a separate OS process; nothing here touches Python-heap
-    memory for the video bytes themselves.
+    def` route/service. Only reached when `_needs_transcode` is True, i.e.
+    the source isn't already browser-compatible. Re-encodes to H.264 MP4 via
+    the static ffmpeg binary `imageio-ffmpeg` bundles in its wheel (no system
+    `apt install ffmpeg` — works the same on Render's build image as it does
+    locally). Reads `source_path` and writes `out_path` directly — ffmpeg
+    does its own disk I/O as a separate OS process; nothing here touches
+    Python-heap memory for the video bytes themselves.
 
     - `-an` drops audio entirely — hero videos are always muted/looped, so
-      an audio track is pure dead weight.
+      an audio track is pure dead weight (and if we're here, the source
+      audio wasn't AAC anyway, so it's being dropped rather than
+      re-transcoded to save the extra encode pass).
     - the scale filter downscales (never upscales) to the slot's profile cap,
       preserving aspect ratio and rounding both dimensions to even numbers
       (required by yuv420p 4:2:0 chroma subsampling).
@@ -273,11 +247,11 @@ def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
       *twice*: once before `-i` (an input-context option, bounds the
       decoder reading `source_path`) and once after `-c:v` (an
       output-context option, bounds the libx264 encoder). These are two
-      independent ffmpeg option groups — setting only the output one, as an
-      earlier version of this function did, leaves the decoder free to
-      auto-detect the host's full core count and pay for that many
-      full-resolution decoded-frame buffers. `-filter_threads` gets the same
-      cap for the same reason, for the `scale` filter in between.
+      independent ffmpeg option groups — setting only the output one leaves
+      the decoder free to auto-detect the host's full core count and pay
+      for that many full-resolution decoded-frame buffers. `-filter_threads`
+      gets the same cap for the same reason, for the `scale` filter in
+      between.
     - `+faststart` moves the MP4 moov atom to the front of the file so a
       browser can begin playback after downloading the first chunk instead
       of needing the full file first.
@@ -334,6 +308,22 @@ def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
         raise VideoTranscodeError(stderr)
 
 
+_processor: VideoProcessor = PyAvProbe()
+
+
+def _sniff_video_mime_at_path(path: Path) -> str:
+    # Reads only the first 12 bytes off disk — checked against real file
+    # content, not the filename/extension, same rule the image pipeline
+    # (media_service._sniff_image_type) follows. Never loads the full file.
+    with open(path, "rb") as f:
+        header = f.read(12)
+    if len(header) >= 8 and header[4:8] == b"ftyp":
+        return "video/mp4"
+    if header[:4] == b"\x1a\x45\xdf\xa3":
+        return "video/webm"
+    raise AppError(code="invalid_file", message="File is not a recognized MP4 or WebM video.", status_code=422)
+
+
 def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
     """Copies the incoming upload to `dest` in fixed-size chunks, enforcing
     `max_bytes` as it goes (aborts as soon as the cap is crossed, rather than
@@ -368,29 +358,31 @@ def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
 
 def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
     """Synchronous body of `upload_hero_video` — everything here is either
-    CPU-bound (ffmpeg, PyAV) or a blocking network call (Supabase Storage),
-    so `upload_hero_video` runs this whole thing via `asyncio.to_thread`
-    rather than awaiting it piecemeal on the event loop.
+    CPU-bound (PyAV probing, occasionally ffmpeg) or a blocking network call
+    (Supabase Storage), so `upload_hero_video` runs this whole thing via
+    `asyncio.to_thread` rather than awaiting it piecemeal on the event loop.
 
-    Rewritten after a production incident: the previous version read the
-    whole upload into a `bytes` object (`await file.read()`), wrapped it in
-    `io.BytesIO` for probing (a second full copy), wrote it back out to a
-    temp file for ffmpeg, then read ffmpeg's compressed output fully into a
-    third `bytes` object before uploading. On a memory-constrained Render
-    instance, that Python-side duplication — stacked on top of ffmpeg's own
-    child-process memory for decoding/encoding — exceeded the container's
-    RAM limit and got the whole service OOM-killed and restarted mid-upload.
-    Every step below is disk-backed instead: the upload is stream-copied to
-    a temp file, ffmpeg reads/writes temp files directly, PyAV probes by
-    path, and the compressed result is uploaded from an open file handle —
-    the video's bytes are never held as a single Python object anywhere in
-    this function.
+    Conditional transcode: per the production upload audit, re-encoding
+    *every* upload through ffmpeg was what made hero uploads slow (CRF-
+    quality libx264 on Render's CPU-throttled Starter plan) even though most
+    admin-exported clips are already H.264 MP4 and need no re-encoding at
+    all for browser playback. `_needs_transcode` (checked against the real
+    stream headers via PyAV, not the file extension) decides per-upload: an
+    already-compatible source is validated and stored as-is; anything else
+    still gets the same ffmpeg transcode as before, so compatibility is
+    never sacrificed for speed. The 25MB size cap
+    (`get_settings().hero_video_max_bytes`) bounds both paths regardless.
+
+    Disk-backed throughout: the upload is stream-copied to a temp file
+    (never held as one big `bytes` object), ffmpeg (when it runs) reads/
+    writes temp files directly, and the stored result is uploaded from an
+    open file handle.
 
     Instrumented with `_timed_step` around every major step (see that
-    helper's docstring) so a slow or OOM-killed upload can be diagnosed from
-    the logs alone — which step it reached and how long each prior step
-    took, not just "the request never completed." Purely additive logging;
-    no control flow below was changed to add it.
+    helper's docstring) so a slow upload can be diagnosed from the logs
+    alone — which step it reached, how long each prior step took, and
+    (via the `compatibility_check` log line) whether it took the transcode
+    path at all.
     """
     request_start = time.perf_counter()
     max_bytes = get_settings().hero_video_max_bytes
@@ -398,87 +390,92 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
     try:
         with tempfile.TemporaryDirectory(prefix="elato-hero-") as tmp_dir:
             source_path = Path(tmp_dir) / "source"
-            out_path = Path(tmp_dir) / "output.mp4"
 
             with _timed_step("stream_to_temp_file", slot):
                 total = _stream_upload_to_path(file, source_path, max_bytes)
             if total == 0:
                 raise AppError(code="invalid_file", message="Uploaded file is empty.", status_code=422)
 
-            _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before spending CPU on a transcode
+            mime = _sniff_video_mime_at_path(source_path)  # cheap magic-byte check — reject junk before any CPU work
 
             with _timed_step("metadata_probe_source", slot):
-                # No poster needed here — only `final_probe`'s (below, on the
-                # *compressed* output) is ever stored, so skip decoding one
-                # from the source and throwing it away.
-                source_probe = _processor.probe(str(source_path), include_poster=False)
-            if source_probe.duration_seconds is not None and source_probe.duration_seconds > _MAX_DURATION_SECONDS:
+                probe = _processor.probe(str(source_path))
+            if probe.duration_seconds is not None and probe.duration_seconds > _MAX_DURATION_SECONDS:
                 raise AppError(
                     code="video_too_long",
                     message=(
                         f"Hero videos must be {_MAX_DURATION_SECONDS}s or shorter (this one is "
-                        f"{source_probe.duration_seconds:.1f}s) — they loop, so keep it short."
+                        f"{probe.duration_seconds:.1f}s) — they loop, so keep it short."
                     ),
                     status_code=422,
                 )
-            if source_probe.width and source_probe.height:
-                if min(source_probe.width, source_probe.height) < _MIN_DIMENSION:
+            if probe.width and probe.height:
+                if min(probe.width, probe.height) < _MIN_DIMENSION:
                     raise AppError(
                         code="video_too_small",
-                        message=f"Resolution is too low ({source_probe.width}x{source_probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
+                        message=f"Resolution is too low ({probe.width}x{probe.height}) — minimum {_MIN_DIMENSION}px on the shorter side.",
                         status_code=422,
                     )
-                if max(source_probe.width, source_probe.height) > _MAX_DIMENSION:
+                if max(probe.width, probe.height) > _MAX_DIMENSION:
                     raise AppError(
                         code="video_dimensions_too_large",
-                        message=f"Resolution is too high ({source_probe.width}x{source_probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
+                        message=f"Resolution is too high ({probe.width}x{probe.height}) — please pre-compress to {_MAX_DIMENSION}px or under on the longer side.",
                         status_code=422,
                     )
 
-            with _timed_step("ffmpeg_compression", slot):
-                try:
-                    _transcode_to_h264(source_path, out_path, slot)
-                except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
-                    stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
-                    logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
-                    raise AppError(
-                        code="video_processing_failed",
-                        message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
-                        status_code=502,
-                    ) from exc
+            transcode_needed = _needs_transcode(mime, probe)
+            logger.info(
+                f"[hero_video_upload] slot={slot} step=compatibility_check transcode_needed={transcode_needed} "
+                f"container={mime} video_codec={probe.video_codec} audio_codec={probe.audio_codec} "
+                f"has_audio={probe.has_audio}"
+            )
 
-            # Re-probe the *compressed* output — the transcode may have downscaled
-            # it, so this is what's actually being delivered, not the source's stats.
-            # This single PyAV call does both metadata probing AND poster-frame
-            # extraction/encoding in one pass (see PyAvProbe) — they aren't two
-            # separate calls in this implementation, so they can't be timed
-            # separately without restructuring that class, which is out of scope
-            # for a logging-only change. Named to make that explicit rather than
-            # mislabel it as just one or the other.
-            with _timed_step("metadata_probe_and_poster_generation", slot):
-                final_probe = _processor.probe(str(out_path))
-            mime = "video/mp4"  # transcode output is always H.264/MP4 now, regardless of the source container
-            ext = "mp4"
+            if transcode_needed:
+                out_path = Path(tmp_dir) / "output.mp4"
+                with _timed_step("ffmpeg_compression", slot):
+                    try:
+                        _transcode_to_h264(source_path, out_path, slot)
+                    except (VideoTranscodeError, subprocess.TimeoutExpired) as exc:
+                        stderr = exc.stderr if isinstance(exc, VideoTranscodeError) else str(exc)
+                        logger.error(f"Hero video transcode failed for slot={slot}: {stderr[-2000:] if stderr else stderr}")
+                        raise AppError(
+                            code="video_processing_failed",
+                            message="We couldn't process this video. Try re-exporting it as a standard H.264/MP4 file and upload again.",
+                            status_code=502,
+                        ) from exc
 
+                # Re-probe the *compressed* output — the transcode may have
+                # downscaled it and always drops audio, so this is what's
+                # actually being delivered, not the source's stats. The
+                # source-side poster decoded above (if any) is discarded in
+                # favor of this one.
+                with _timed_step("metadata_probe_and_poster_generation", slot):
+                    probe = _processor.probe(str(out_path))
+                upload_path = out_path
+                mime = "video/mp4"
+            else:
+                upload_path = source_path
+
+            ext = "mp4"  # both branches land on MP4: transcode output always is, and only an MP4 source skips it
             supabase = get_supabase()
             stem = uuid.uuid4().hex
             video_path = f"{slot}/{stem}.{ext}"
             with _timed_step("upload_video_to_supabase", slot):
-                with open(out_path, "rb") as f:
+                with open(upload_path, "rb") as f:
                     supabase.storage.from_(VIDEO_BUCKET).upload(
                         video_path, f, {"content-type": mime, "cache-control": "31536000"}
                     )
-            file_size_bytes = out_path.stat().st_size
+            file_size_bytes = upload_path.stat().st_size
 
             poster_bucket = None
             poster_path = None
-            if final_probe.poster_jpeg:
+            if probe.poster_jpeg:
                 candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
                 with _timed_step("upload_poster_to_supabase", slot):
                     try:
                         supabase.storage.from_(POSTER_BUCKET).upload(
                             candidate_poster_path,
-                            final_probe.poster_jpeg,
+                            probe.poster_jpeg,
                             {"content-type": "image/jpeg", "cache-control": "31536000"},
                         )
                         poster_bucket = POSTER_BUCKET
@@ -501,9 +498,9 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
                         "video_path": video_path,
                         "video_mime": mime,
                         "file_size_bytes": file_size_bytes,
-                        "width": final_probe.width or source_probe.width,
-                        "height": final_probe.height or source_probe.height,
-                        "duration_seconds": final_probe.duration_seconds or source_probe.duration_seconds,
+                        "width": probe.width,
+                        "height": probe.height,
+                        "duration_seconds": probe.duration_seconds,
                         "poster_bucket": poster_bucket,
                         "poster_path": poster_path,
                         "uploaded_by": uploaded_by,
@@ -521,14 +518,11 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
         # wraps everything above, including the `return`), so source_path/
         # out_path and their containing tmp_dir are already deleted from
         # disk — this log line is confirmation of that, not a separate
-        # cleanup step. The RSS reading here is what to compare against each
-        # step's own rss_after (logged by `_timed_step`) to see whether
-        # memory was actually released once ffmpeg exited and the temp files
-        # were removed, or whether it's still held by the process.
+        # cleanup step.
         total_ms = (time.perf_counter() - request_start) * 1000
         logger.info(
             f"[hero_video_upload] slot={slot} step=total_request duration_ms={total_ms:.1f} "
-            f"tmp_dir_cleaned_up=true rss_after_cleanup_kb={_current_rss_kb()}"
+            f"tmp_dir_cleaned_up=true rss_after_cleanup_kb={current_rss_kb()}"
         )
 
 
