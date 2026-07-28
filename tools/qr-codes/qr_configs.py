@@ -20,7 +20,7 @@ QR_OUTPUT_DIR = REPO_ROOT / "assets" / "qr"
 # Celebré page's #menu section — same destination as the site's own
 # "Our Menu" nav button — so it opens directly with no intermediate
 # redirect hop.
-MENU_URL = "https://elatogroup.in/elato-celebre#menu"
+MENU_URL = "https://elatogroups.in/elato-celebre#menu"
 
 MENU_QR = QRConfig(
     url=MENU_URL,
@@ -28,5 +28,5 @@ MENU_QR = QRConfig(
 )
 
 # Future destinations, e.g.:
-# STAY_URL = "https://elatogroup.in/elato-stay"
+# STAY_URL = "https://elatogroups.in/elato-stay"
 # STAY_QR = QRConfig(url=STAY_URL, output_path=QR_OUTPUT_DIR / "stay-qr.png")

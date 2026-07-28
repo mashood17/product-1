@@ -4,9 +4,10 @@ only ever select active/public rows — mirrors the RLS policies in migration
 0001 so the backend and the database agree on what "public" means.
 """
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.core.exceptions import NotFoundError
+from app.middleware.rate_limit import rate_limit
 from app.repositories import (
     category_repository,
     enquiry_repository,
@@ -59,7 +60,7 @@ def list_site_content(response: Response):
     # rather than one call per key. Values are already public — the per-key
     # endpoint below exposes the same data — and change rarely, so a short
     # browser/CDN cache is safe.
-    response.headers["Cache-Control"] = "public, max-age=60"
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=30"
     return [SiteContentOut(**row) for row in site_content_repository.list_all()]
 
 
@@ -91,7 +92,12 @@ def get_active_offer_claim_status(visitor_id: str) -> dict[str, bool]:
     return {"claimed": offer_registration_service.has_visitor_claimed_active_offer(visitor_id)}
 
 
-@router.post("/offers/register", response_model=OfferRegistrationOut, status_code=201)
+@router.post(
+    "/offers/register",
+    response_model=OfferRegistrationOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("offers-register", max_requests=5, window_seconds=60))],
+)
 def register_for_offer(payload: OfferRegistrationCreate):
     fields = payload.model_dump(mode="json")
     row = offer_registration_service.register_for_active_offer(**fields)
@@ -101,7 +107,7 @@ def register_for_offer(payload: OfferRegistrationCreate):
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(response: Response):
     # Admin-managed, changes rarely — same cadence as site-content/gallery below.
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     # Each row carries an embedded media(storage_path, bucket) join — resolve it
     # to the optimized public URL so the Celebré frontend gets a usable image.
     out = []
@@ -115,7 +121,7 @@ def list_categories(response: Response):
 def list_menu_items(response: Response, category_id: str | None = None, is_available: bool | None = None):
     # Shorter than categories/gallery — availability toggles are the one
     # thing here an admin would plausibly want to reflect within a minute.
-    response.headers["Cache-Control"] = "public, max-age=60"
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=30"
     out = []
     for row in menu_item_repository.list_public(category_id, is_available):
         image_url = media_service.pop_embedded_media_url(row)
@@ -126,7 +132,7 @@ def list_menu_items(response: Response, category_id: str | None = None, is_avail
 @router.get("/specials", response_model=list[SpecialOut])
 def list_specials(response: Response):
     # Date-windowed activation — same reasoning as menu-items above.
-    response.headers["Cache-Control"] = "public, max-age=60"
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=30"
     out = []
     for row in special_repository.list_public():
         image_url = media_service.pop_embedded_media_url(row)
@@ -136,7 +142,7 @@ def list_specials(response: Response):
 
 @router.get("/gallery", response_model=list[GalleryItemOut])
 def list_gallery(response: Response, category: str | None = None):
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     out = []
     for row in gallery_repository.list_public(category):
         media_srcset = media_service.pop_embedded_media_srcset(row)
@@ -147,13 +153,13 @@ def list_gallery(response: Response, category: str | None = None):
 
 @router.get("/event-packages", response_model=list[EventPackageOut])
 def list_event_packages(response: Response):
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     return event_package_repository.list_public()
 
 
 @router.get("/rooms", response_model=list[RoomOut])
 def list_rooms(response: Response):
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     return room_repository.list_public()
 
 
@@ -161,7 +167,7 @@ def list_rooms(response: Response):
 def list_featured_reviews(response: Response):
     # Admin-curated set changes rarely — same cache cadence as the aggregate
     # rating below, and the one homepage public endpoint that was missing it.
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     return review_repository.list_featured()
 
 
@@ -169,7 +175,7 @@ def list_featured_reviews(response: Response):
 def get_reviews_aggregate(response: Response):
     # Business-wide rating/count changes rarely — safe to cache briefly
     # rather than hit Supabase on every homepage load.
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
     return review_repository.get_aggregate()
 
 
@@ -181,7 +187,12 @@ def list_video_gallery():
     return [video_gallery_service.to_schema(row) for row in video_gallery_repository.list_all()]
 
 
-@router.post("/enquiries", response_model=EnquiryOut, status_code=201)
+@router.post(
+    "/enquiries",
+    response_model=EnquiryOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("enquiries", max_requests=5, window_seconds=60))],
+)
 def create_enquiry(payload: EnquiryCreate):
     fields = payload.model_dump(mode="json", exclude_none=False)
     row = enquiry_repository.create(fields)
@@ -190,7 +201,11 @@ def create_enquiry(payload: EnquiryCreate):
     return EnquiryOut(**row)
 
 
-@router.post("/analytics/events", status_code=204)
+@router.post(
+    "/analytics/events",
+    status_code=204,
+    dependencies=[Depends(rate_limit("analytics-events", max_requests=40, window_seconds=60))],
+)
 def create_analytics_event(payload: AnalyticsEventCreate, request: Request):
     # Fire-and-forget from the frontend's point of view: we still validate
     # and persist, but never return anything that could make a caller think

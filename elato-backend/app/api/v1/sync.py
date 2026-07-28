@@ -5,10 +5,11 @@ Render's scheduled job feature hitting this with the shared secret header;
 not exposed to admins or the public.
 """
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 
 from app.core.config import get_settings
 from app.core.exceptions import UnauthorizedError
+from app.middleware.rate_limit import rate_limit
 from app.services import reviews_service
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -20,7 +21,11 @@ def _check_cron_secret(x_cron_secret: str | None) -> None:
         raise UnauthorizedError("Invalid or missing cron secret.")
 
 
-@router.post("/reviews", status_code=200)
+@router.post(
+    "/reviews",
+    status_code=200,
+    dependencies=[Depends(rate_limit("sync-reviews", max_requests=10, window_seconds=60))],
+)
 async def sync_reviews(x_cron_secret: str | None = Header(default=None)):
     _check_cron_secret(x_cron_secret)
     count = await reviews_service.sync_google_reviews()

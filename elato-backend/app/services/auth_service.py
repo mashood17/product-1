@@ -3,7 +3,7 @@ Admin auth: login, refresh rotation, logout (incl. "everywhere"), and
 password reset. Password-reset emails are sent via Supabase Auth's built-in
 email delivery (project decision — see README "Password reset" section):
 it needs no new provider account or DNS/domain setup, which matters since
-elatogroup.in isn't purchased yet. If/when transactional volume or template
+elatogroups.in isn't purchased yet. If/when transactional volume or template
 control outgrows it, swap for Resend without touching callers — this is the
 only place that sends the email.
 """
@@ -66,7 +66,7 @@ def logout(refresh_token: str | None, admin_id: str, everywhere: bool) -> None:
     if everywhere:
         refresh_token_repository.revoke_all_for_admin(admin_id)
     elif refresh_token:
-        refresh_token_repository.revoke(refresh_token)
+        refresh_token_repository.revoke_for_admin(admin_id, refresh_token)
 
 
 def request_password_reset(email: str) -> None:

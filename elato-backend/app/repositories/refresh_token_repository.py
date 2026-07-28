@@ -48,6 +48,13 @@ def revoke(token: str) -> None:
     ).execute()
 
 
+def revoke_for_admin(admin_id: str, token: str) -> None:
+    """Like `revoke`, but scoped to `admin_id` — a caller can only revoke their own token."""
+    client().table(TABLE).update({"revoked_at": datetime.now(timezone.utc).isoformat()}).eq(
+        "token_hash", _hash(token)
+    ).eq("admin_id", admin_id).execute()
+
+
 def revoke_all_for_admin(admin_id: str) -> None:
     client().table(TABLE).update({"revoked_at": datetime.now(timezone.utc).isoformat()}).eq(
         "admin_id", admin_id

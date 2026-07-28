@@ -26,6 +26,9 @@ export function Seo({ title, description, path, jsonLd, ogImage = DEFAULT_OG_IMA
       <meta property="og:url" content={url} />
       <meta property="og:type" content="website" />
       <meta property="og:image" content={ogImage} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:type" content="image/jpeg" />
       <meta property="og:site_name" content={SITE_NAME} />
 
       <meta name="twitter:card" content="summary_large_image" />

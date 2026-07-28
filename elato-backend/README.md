@@ -45,12 +45,7 @@ supabase db push
 
 ## Status
 
-🟡 Architecture scaffold complete and verified running (health check, structured logs, error shape, JWT utilities all tested locally). 🔴 No live Supabase connection, no business endpoints, no admin auth flow yet — blocked on real Supabase project credentials being wired into `.env`.
-
-> Note (testing pass): this "Status" section predates the "Backend Structure"
-> commit, which added real `/api/v1/*` routes, repositories, and admin auth
-> (see `app/api/v1/`) — it's stale and worth updating separately. Left as-is
-> here since narrating the app's build status isn't this testing pass's job.
+🟢 Live: real Supabase connection, full `/api/v1/*` business endpoint set (public + admin), and the complete admin auth flow (login, refresh rotation, logout, password reset) are wired in and verified running against a real project — see `app/api/v1/` and `app/services/auth_service.py`.
 
 ## Testing
 

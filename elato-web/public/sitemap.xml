@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://elatogroup.in/</loc>
+    <loc>https://elatogroups.in/</loc>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://elatogroup.in/elato-stay</loc>
+    <loc>https://elatogroups.in/elato-stay</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://elatogroup.in/elato-celebre</loc>
+    <loc>https://elatogroups.in/elato-celebre</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://elatogroup.in/elato-events</loc>
+    <loc>https://elatogroups.in/elato-events</loc>
     <priority>0.8</priority>
   </url>
 </urlset>
