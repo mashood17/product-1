@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { mediaApi } from "../../api/resources";
@@ -6,8 +6,8 @@ import { useToast } from "../../context/ToastContext";
 import { errorMessage } from "../../lib/query-client";
 import { mediaQueryKey } from "./media-query-key";
 import { ImageCropDialog } from "./ImageCropDialog";
-import { matchesAspect, readImageDimensions } from "./crop-image";
-import { BUCKET_MAX_BYTES, formatByteLimit } from "./upload-limits";
+import { matchesAspect, readImageDimensions, sniffImageFormat } from "./crop-image";
+import { BUCKET_MAX_BYTES, formatByteLimit, imageUploadBudget } from "./upload-limits";
 import type { DimensionSpec } from "./upload-specs";
 import type { MediaBucket, MediaOut } from "../../types/api";
 
@@ -52,13 +52,17 @@ export function useImageUpload(bucket: MediaBucket, onUploaded: (media: MediaOut
   // Same size check as before the crop step existed — now the gate that
   // runs first, so an oversized file is rejected immediately and never gets
   // sent to the crop dialog. Reused as-is after cropping too, since the
-  // cropped export goes through this exact same validation.
-  function isWithinLimit(file: File): boolean {
+  // cropped export goes through this exact same validation — by then
+  // ImageCropDialog has already tried to fit the export under budget, so a
+  // rejection here means that automatic optimization wasn't enough.
+  function isWithinLimit(file: File, afterCrop = false): boolean {
     const maxBytes = BUCKET_MAX_BYTES[bucket];
-    if (file.size > maxBytes) {
+    if (file.size > imageUploadBudget(maxBytes)) {
       showToast({
         title: "Image too large",
-        description: `This category accepts images up to ${formatByteLimit(maxBytes)} — please resize and try again.`,
+        description: afterCrop
+          ? `Cropped image is ${formatByteLimit(file.size)} even after automatic optimization — this category accepts up to ${formatByteLimit(maxBytes)}. Try a smaller source image.`
+          : `This image is ${formatByteLimit(file.size)} — this category accepts up to ${formatByteLimit(maxBytes)}. Please resize and try again.`,
         variant: "error",
       });
       return false;
@@ -71,10 +75,34 @@ export function useImageUpload(bucket: MediaBucket, onUploaded: (media: MediaOut
     setPendingCrop(null);
   }
 
+  // Belt-and-suspenders: closeCropDialog already revokes on cancel/crop, but
+  // if the admin navigates away (or the field unmounts) while the dialog is
+  // still open, that revoke never runs otherwise — this catches it. Revoking
+  // an already-revoked URL is a documented no-op, so this can't double-free.
+  useEffect(() => {
+    return () => {
+      if (pendingCrop) URL.revokeObjectURL(pendingCrop.imageSrc);
+    };
+  }, [pendingCrop]);
+
   async function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+
+    const format = await sniffImageFormat(file);
+    if (format === "unsupported" || format === "heic") {
+      showToast({
+        title: "Unsupported image format",
+        description:
+          format === "heic"
+            ? "HEIC/HEIF photos aren't supported — set your camera to save as JPEG, or export this photo as JPEG before uploading."
+            : "Please upload a JPEG, PNG, or WebP image.",
+        variant: "error",
+      });
+      return;
+    }
+
     if (!isWithinLimit(file)) return;
 
     if (spec?.aspect != null) {
@@ -99,7 +127,14 @@ export function useImageUpload(bucket: MediaBucket, onUploaded: (media: MediaOut
     progress,
     inputElement: (
       <>
-        <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={handleChange} tabIndex={-1} />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          onChange={handleChange}
+          tabIndex={-1}
+        />
         {pendingCrop && spec?.aspect != null && (
           <ImageCropDialog
             open
@@ -107,10 +142,13 @@ export function useImageUpload(bucket: MediaBucket, onUploaded: (media: MediaOut
             fileName={pendingCrop.file.name}
             mimeType={pendingCrop.file.type || "image/jpeg"}
             aspect={spec.aspect}
+            maxBytes={BUCKET_MAX_BYTES[bucket]}
+            maxWidth={spec.width}
+            maxHeight={spec.height}
             onCancel={closeCropDialog}
             onCropped={(croppedFile) => {
               closeCropDialog();
-              if (isWithinLimit(croppedFile)) mutation.mutate(croppedFile);
+              if (isWithinLimit(croppedFile, true)) mutation.mutate(croppedFile);
             }}
           />
         )}

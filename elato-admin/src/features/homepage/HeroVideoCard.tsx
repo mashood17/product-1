@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Film, ImagePlus, Trash2, Eye } from "lucide-react";
 import { heroBackgroundsApi } from "../../api/resources";
@@ -8,7 +8,7 @@ import { errorMessage } from "../../lib/query-client";
 import { HERO_BACKGROUNDS_QUERY_KEY } from "./hero-background-query-key";
 import { UploadSpecHint } from "../media/UploadSpecHint";
 import { ImageCropDialog } from "../media/ImageCropDialog";
-import { matchesAspect, readImageDimensions } from "../media/crop-image";
+import { matchesAspect, readImageDimensions, sniffImageFormat } from "../media/crop-image";
 import { DIMENSION_SPECS } from "../media/upload-specs";
 import { BUCKET_MAX_BYTES, HERO_VIDEO_MAX_BYTES } from "../media/upload-limits";
 import type { DimensionSpec } from "../media/upload-specs";
@@ -52,6 +52,16 @@ export function HeroVideoCard({
       ? { width: 1920, height: 1080, aspectLabel: "16:9", aspect: null, formats: "MP4 (H.264)" }
       : { width: 1080, height: 1920, aspectLabel: "9:16", aspect: null, formats: "MP4 (H.264)" };
   const posterSpec = slot === "desktop" ? DIMENSION_SPECS.heroDesktop : DIMENSION_SPECS.heroMobile;
+
+  // Same belt-and-suspenders unmount cleanup as useImageUpload — the cancel/
+  // cropped handlers below already revoke on their own paths; this only
+  // catches navigating away while the dialog is still open. Revoking an
+  // already-revoked URL is a no-op, so this can't double-free.
+  useEffect(() => {
+    return () => {
+      if (pendingPosterCrop) URL.revokeObjectURL(pendingPosterCrop.imageSrc);
+    };
+  }, [pendingPosterCrop]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: HERO_BACKGROUNDS_QUERY_KEY });
 
@@ -167,12 +177,26 @@ export function HeroVideoCard({
                   <input
                     ref={posterInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     className="sr-only"
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
                       if (!file) return;
+
+                      const format = await sniffImageFormat(file);
+                      if (format === "unsupported" || format === "heic") {
+                        showToast({
+                          title: "Unsupported image format",
+                          description:
+                            format === "heic"
+                              ? "HEIC/HEIF photos aren't supported — export this photo as JPEG before uploading."
+                              : "Please upload a JPEG, PNG, or WebP image.",
+                          variant: "error",
+                        });
+                        return;
+                      }
+
                       try {
                         const { width, height } = await readImageDimensions(file);
                         if (posterSpec.aspect != null && !matchesAspect(width, height, posterSpec.aspect)) {
@@ -247,6 +271,9 @@ export function HeroVideoCard({
           fileName={pendingPosterCrop.file.name}
           mimeType={pendingPosterCrop.file.type || "image/jpeg"}
           aspect={posterSpec.aspect}
+          maxBytes={BUCKET_MAX_BYTES.hero}
+          maxWidth={posterSpec.width}
+          maxHeight={posterSpec.height}
           onCancel={() => {
             URL.revokeObjectURL(pendingPosterCrop.imageSrc);
             setPendingPosterCrop(null);

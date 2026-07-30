@@ -39,6 +39,7 @@ from fastapi import UploadFile
 
 import pillow_avif  # noqa: F401  registers the AVIF codec with Pillow on import
 from app.core.exceptions import AppError
+from app.core.upload_tolerance import image_budget
 from app.db import get_supabase
 from app.repositories import media_repository
 from app.utils.perf import timed_step
@@ -179,12 +180,13 @@ async def _read_upload_capped(file: UploadFile, max_bytes: int) -> bytes:
     chunks: list[bytes] = []
     total = 0
     chunk_size = 256 * 1024
+    budget = image_budget(max_bytes)  # see app/core/upload_tolerance.py
     while True:
         chunk = await file.read(chunk_size)
         if not chunk:
             break
         total += len(chunk)
-        if total > max_bytes:
+        if total > budget:
             raise AppError(
                 code="file_too_large",
                 message=f"Image is too large for this category — please keep it under {_format_limit(max_bytes)}.",

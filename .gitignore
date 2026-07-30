@@ -14,3 +14,8 @@ node_modules/
 
 # Added by code-review-graph
 .code-review-graph/
+
+# Playwright MCP tool output (page snapshots, generated test media) — written
+# to the repo root by the tool itself, not a project convention; never meant
+# to be committed.
+.playwright-mcp/

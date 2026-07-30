@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { Button, Modal } from "../../components/ui";
+import { useToast } from "../../context/ToastContext";
 import { getCroppedImageFile, type PixelCrop } from "./crop-image";
+import { imageUploadBudget } from "./upload-limits";
 
 /**
  * Pre-upload crop step, shown only when a selected image doesn't already
@@ -16,6 +18,9 @@ export function ImageCropDialog({
   fileName,
   mimeType,
   aspect,
+  maxBytes,
+  maxWidth,
+  maxHeight,
   onCancel,
   onCropped,
 }: {
@@ -24,6 +29,9 @@ export function ImageCropDialog({
   fileName: string;
   mimeType: string;
   aspect: number;
+  maxBytes: number;
+  maxWidth?: number;
+  maxHeight?: number;
   onCancel: () => void;
   onCropped: (file: File) => void;
 }) {
@@ -31,6 +39,7 @@ export function ImageCropDialog({
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const { showToast } = useToast();
 
   const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setCroppedAreaPixels(areaPixels);
@@ -41,8 +50,22 @@ export function ImageCropDialog({
     setIsExporting(true);
     try {
       const cropped: PixelCrop = croppedAreaPixels;
-      const file = await getCroppedImageFile(imageSrc, cropped, fileName, mimeType);
+      const file = await getCroppedImageFile(
+        imageSrc,
+        cropped,
+        fileName,
+        mimeType,
+        imageUploadBudget(maxBytes),
+        maxWidth,
+        maxHeight,
+      );
       onCropped(file);
+    } catch (err) {
+      showToast({
+        title: "Couldn't process image",
+        description: err instanceof Error ? err.message : "Try a different photo or a smaller crop area.",
+        variant: "error",
+      });
     } finally {
       setIsExporting(false);
     }

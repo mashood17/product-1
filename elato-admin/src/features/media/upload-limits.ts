@@ -25,6 +25,26 @@ export const HERO_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
 // Mirrors elato-backend/app/services/video_gallery_service.py's `MAX_BYTES`.
 export const VIDEO_GALLERY_MAX_BYTES = 30 * 1024 * 1024;
 
+// Absorbs harmless encoding noise (a different JPEG/WebP encoder's
+// quantization tables, container/muxer overhead, filesystem block rounding)
+// so a configured "512 KB" cap doesn't reject an upload that's functionally
+// the same size. Every validation path — this file's own budget helpers
+// below, and the mirrored constants in
+// elato-backend/app/core/upload_tolerance.py — applies this on top of the
+// advertised limit rather than comparing against it byte-for-byte.
+export const IMAGE_SIZE_TOLERANCE_BYTES = 20 * 1024;
+export const VIDEO_SIZE_TOLERANCE_BYTES = 1 * 1024 * 1024;
+
+/** The real accept threshold for an image bucket's advertised limit. */
+export function imageUploadBudget(maxBytes: number): number {
+  return maxBytes + IMAGE_SIZE_TOLERANCE_BYTES;
+}
+
+/** The real accept threshold for a video limit's advertised limit. */
+export function videoUploadBudget(maxBytes: number): number {
+  return maxBytes + VIDEO_SIZE_TOLERANCE_BYTES;
+}
+
 export function formatByteLimit(maxBytes: number): string {
   return maxBytes < 1024 * 1024 ? `${Math.round(maxBytes / 1024)} KB` : `${Math.round(maxBytes / (1024 * 1024))} MB`;
 }

@@ -49,6 +49,7 @@ from fastapi import UploadFile
 
 from app.core.config import get_settings
 from app.core.exceptions import AppError
+from app.core.upload_tolerance import video_budget
 from app.db import get_supabase
 from app.repositories import hero_background_repository
 from app.services import media_service
@@ -339,13 +340,14 @@ def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
     file.file.seek(0)
     total = 0
     chunk_size = 1024 * 1024
+    budget = video_budget(max_bytes)  # see app/core/upload_tolerance.py
     with open(dest, "wb") as out:
         while True:
             chunk = file.file.read(chunk_size)
             if not chunk:
                 break
             total += len(chunk)
-            if total > max_bytes:
+            if total > budget:
                 limit_mb = max_bytes // (1024 * 1024)
                 raise AppError(
                     code="file_too_large",
