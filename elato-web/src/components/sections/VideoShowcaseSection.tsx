@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion, type Variants } from 'framer-motion'
 import { InstagramGlyph } from '../ui/InstagramGlyph'
+import { InstagramVerifiedBadge } from '../ui/InstagramVerifiedBadge'
 import { SkeletonCard } from '../ui/SkeletonCard'
 import { SectionBackground } from '../ui/SectionBackground'
 import { VideoShowcaseCarousel } from './VideoShowcaseCarousel'
@@ -27,6 +28,7 @@ function FollowButton({ label, className = '' }: { label: string; className?: st
     >
       <InstagramGlyph className="h-4 w-4" />
       <span className="relative z-10">{label}</span>
+      <InstagramVerifiedBadge className="relative z-10 h-4 w-4 shrink-0" />
       <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
     </motion.a>
   )

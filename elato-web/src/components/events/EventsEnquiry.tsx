@@ -36,7 +36,7 @@ const EVENT_TYPES = [
 ] as const
 
 const GUEST_MIN = 1
-const GUEST_MAX = 250
+const GUEST_MAX = 300
 
 type Errors = Partial<
   Record<'name' | 'phone' | 'email' | 'date' | 'guests' | 'message', string>

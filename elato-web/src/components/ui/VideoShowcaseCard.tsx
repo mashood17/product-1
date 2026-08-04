@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, Volume2, VolumeX } from 'lucide-react'
 import { useInView } from '../../lib/useInView'
+import { InstagramVerifiedBadge } from './InstagramVerifiedBadge'
+import elatoWordmark from '../../assets/logos/elato-wordmark.webp'
 import type { VideoGalleryItem } from '../../lib/videoGalleryRepository'
 
 // Falls back here whenever a video has no Instagram link, or the link isn't
@@ -140,10 +142,13 @@ export function VideoShowcaseCard({
             {/* Top glass overlay — reads as an Instagram Reel's account row. */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/55 via-black/10 to-transparent" />
             <div className="absolute left-3 top-3 flex items-center gap-1.5">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#E7CAA0] to-[#9E7641] text-[10px] font-bold text-[#3A2E1E]">
-                Ō
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#FBF3E4] p-1 ring-1 ring-white/40">
+                <img src={elatoWordmark} alt="" aria-hidden="true" className="h-full w-full object-contain" />
               </span>
-              <span className="text-xs font-semibold tracking-wide text-white drop-shadow-sm">elato.in</span>
+              <span className="flex items-center gap-1">
+                <span className="text-xs font-semibold tracking-wide text-white drop-shadow-sm">elato.in</span>
+                <InstagramVerifiedBadge className="h-3 w-3 shrink-0" />
+              </span>
             </div>
 
             <button
