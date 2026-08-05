@@ -1,0 +1,34 @@
+name: Supabase Keepalive
+
+# Supabase auto-pauses free-tier projects after 7 days of inactivity. This
+# pings the project daily with a trivial read so it never goes idle long
+# enough to trigger that. Runs independently of the app/backend deploy.
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC daily
+  workflow_dispatch: {} # allows a manual "Run workflow" for testing
+
+jobs:
+  ping:
+    name: Ping Supabase
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: elato-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal dependencies
+        run: pip install supabase>=2.9 httpx>=0.27 pydantic-settings>=2.5 python-dotenv>=1.0
+
+      - name: Ping Supabase
+        env:
+          ENV: production
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: python scripts/keepalive.py
