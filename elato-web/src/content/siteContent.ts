@@ -73,8 +73,11 @@ export const aboutContent = {
     'Backed by more than 30 years of expertise in the ice cream industry through founder Abdul Hakeem, ELATŌ combines traditional craftsmanship with modern hospitality.',
     'From handcrafted ice creams and signature beverages to elegant event spaces and premium stays, every detail reflects our commitment to excellence.',
     'Whether you’re here for dessert, a family gathering, a birthday celebration, or a weekend stay, ELATŌ offers experiences designed to create lasting memories.',
-    'In recognition of this journey, ELATŌ has been nominated for “Best Premium Ice-Cream Parlour & Desserts” at the Global Icon Awards 2026 — a milestone we’re proud to share with everyone who has supported us along the way.',
   ],
+  achievement: {
+    eyebrow: 'Global Icon Awards 2026',
+    title: 'Winner — Best Premium Ice-Cream Parlour & Desserts',
+  },
   ctaLabel: 'Plan Your Visit',
 }
 

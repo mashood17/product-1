@@ -7,7 +7,7 @@ import {
   useTransform,
   type Variants,
 } from 'framer-motion'
-import { Star } from 'lucide-react'
+import { Award, Star } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import sectionBackground from '../../assets/newbg/bg.webp'
 import sectionBackgroundMobile from '../../assets/newbg/bg-mb.webp'
@@ -22,6 +22,29 @@ import { useSectionExitFade } from '../../lib/useSectionExitFade'
 const EASE_EDITORIAL = [0.16, 1, 0.3, 1] as const
 // Trigger the entrance once ~25-30% of the section is visible, and never replay it on subsequent scrolls.
 const aboutViewport = { once: true, amount: 0.28 }
+
+// Brand/founder mentions get a subtle emphasis treatment inside the body
+// copy rather than staying flat gray — same brand color as the rest of the
+// section, no new color introduced. "Abdul Hakeem" only appears once so
+// every mention gets it; "ELATŌ" repeats across paragraphs, so `elatoState`
+// tracks whether the (one) highlight has already been used — only the
+// first occurrence across the whole paragraph list should stand out, not
+// every repeat of the name.
+const HIGHLIGHT_PATTERN = /(ELATŌ|Abdul Hakeem)/g
+
+function highlightBrandMentions(text: string, elatoState: { highlighted: boolean }) {
+  return text.split(HIGHLIGHT_PATTERN).map((part, i) => {
+    if (part === 'Abdul Hakeem' || (part === 'ELATŌ' && !elatoState.highlighted)) {
+      if (part === 'ELATŌ') elatoState.highlighted = true
+      return (
+        <strong key={i} className="font-semibold text-[#9E7641]">
+          {part}
+        </strong>
+      )
+    }
+    return <span key={i}>{part}</span>
+  })
+}
 
 export function About() {
   const reduceMotion = useReducedMotion()
@@ -128,6 +151,10 @@ export function About() {
       transition: { type: 'spring', duration: 0.6, bounce: 0 },
     },
   }
+
+  // Fresh per render — shared across the paragraphs.map below so only the
+  // first ELATŌ mention across all of them gets highlighted, not every one.
+  const elatoState = { highlighted: false }
 
   return (
     <motion.section
@@ -244,9 +271,25 @@ export function About() {
               variants={textReveal}
               className="text-body mt-4 max-w-[52ch] text-neutral-warm-500"
             >
-              {paragraph}
+              {highlightBrandMentions(paragraph, elatoState)}
             </motion.p>
           ))}
+          <motion.div
+            variants={textReveal}
+            className="mt-6 flex items-center gap-4 rounded-2xl border border-[#9E7641]/25 bg-surface-elevated px-5 py-4 shadow-elato-lg"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#9E7641]/10">
+              <Award className="h-5 w-5 text-[#9E7641]" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9E7641]">
+                {aboutContent.achievement.eyebrow}
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-[#9E7641]">
+                {aboutContent.achievement.title}
+              </p>
+            </div>
+          </motion.div>
           <motion.a
             variants={textReveal}
             href="#visit"
