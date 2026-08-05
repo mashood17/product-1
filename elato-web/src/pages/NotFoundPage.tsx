@@ -4,7 +4,7 @@ import { Logo } from '../components/brand/Logo'
 
 export function NotFoundPage() {
   return (
-    <main className="relative flex min-h-screen items-center overflow-hidden bg-surface-base pt-20">
+    <main id="main-content" className="relative flex min-h-screen items-center overflow-hidden bg-surface-base pt-20">
       <Helmet>
         <title>Page Not Found | ELATŌ</title>
         <meta name="robots" content="noindex" />

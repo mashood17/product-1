@@ -18,6 +18,14 @@ export const businessInfo = {
   email: 'elatogroups@gmail.com',
   instagramHandle: '@elato.in',
   instagramUrl: 'https://instagram.com/elato.in',
+  // Stable canonical Google Business Profile link, built from the CID
+  // embedded in googleWriteReviewUrl's #lrd= fragment (0xeedacba07390ccd2 ->
+  // decimal). Deliberately NOT the personalized google.com/maps directions
+  // URL some tools hand out — that one carries rlz/gs_lcrp session tokens
+  // tied to the browser that generated it, same reason googleReviewsUrl
+  // below strips its own tracking params. ?cid= always resolves to this
+  // exact listing for any visitor, which is what sameAs/structured data needs.
+  googleBusinessProfileUrl: 'https://www.google.com/maps?cid=17211292815943847122',
   // Clean canonical search link — Google's own share links carry session
   // tokens (sxsrf/si/ved/biw/bih/dpr) that are tied to the browser that
   // generated them, so those are intentionally stripped here too.
@@ -69,7 +77,7 @@ export const aboutContent = {
   overline: 'About ELATŌ',
   title: 'Where Every Celebration Begins',
   paragraphs: [
-    'ELATŌ was founded with one vision — to create a destination where families, friends, and guests can celebrate life’s special moments in a premium environment.',
+    'ELATŌ was founded with one vision — to create a destination in Panemangalore, near Mangalore in Dakshina Kannada, where families, friends, and guests can celebrate life’s special moments in a premium environment.',
     'Backed by more than 30 years of expertise in the ice cream industry through founder Abdul Hakeem, ELATŌ combines traditional craftsmanship with modern hospitality.',
     'From handcrafted ice creams and signature beverages to elegant event spaces and premium stays, every detail reflects our commitment to excellence.',
     'Whether you’re here for dessert, a family gathering, a birthday celebration, or a weekend stay, ELATŌ offers experiences designed to create lasting memories.',

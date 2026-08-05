@@ -1,19 +1,19 @@
 import { Helmet } from 'react-helmet-async'
-import { SITE_URL, SITE_NAME, DEFAULT_OG_IMAGE } from '../lib/seoConfig'
+import { SITE_NAME } from '../lib/seoConfig'
+import { buildPageMeta, type PageMetaInput } from '../lib/seoMeta'
 
-type Props = {
-  title: string
-  description: string
-  path: string // e.g. "/elato-stay"
-  jsonLd?: object | object[]
-  ogImage?: string
-}
+type Props = PageMetaInput
 
-/** Per-route metadata (PRD Ch. 45) — one call per page, real values, no shared static tag. */
-export function Seo({ title, description, path, jsonLd, ogImage = DEFAULT_OG_IMAGE }: Props) {
-  const url = `${SITE_URL}${path}`
-  const fullTitle = `${title} | ${SITE_NAME}`
-  const jsonLdList = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : []
+/**
+ * Per-route metadata (PRD Ch. 45) — one call per page, real values, no shared
+ * static tag. Every call also emits a WebPage entry (and a BreadcrumbList
+ * when `breadcrumb` is given) automatically via buildPageMeta, so individual
+ * pages never have to remember to wire that up themselves. That same
+ * function backs scripts/prerender.ts, so the static HTML a crawler sees
+ * pre-hydration matches exactly what this renders post-hydration.
+ */
+export function Seo(props: Props) {
+  const { url, fullTitle, description, ogImage, jsonLdList } = buildPageMeta(props)
 
   return (
     <Helmet>

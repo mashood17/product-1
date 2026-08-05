@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Helmet } from 'react-helmet-async'
 import { MenuSearchBar } from './menu/MenuSearchBar'
 import { CategoryFilterBar } from './menu/CategoryFilterBar'
 import { CategoryRow } from './menu/CategoryRow'
@@ -8,6 +9,7 @@ import { ItemDetailModal } from './menu/ItemDetailModal'
 import { getCategories, getMenuItems, searchMenuItems } from '../../lib/menuRepository'
 import type { Category, MenuItem } from '../../content/celebreContent'
 import { sectionReveal, viewportOnce } from '../../lib/motion'
+import { menuJsonLd } from '../../lib/jsonLd'
 import bgDesktop from '../../assets/newbg/bg2.webp'
 import bgMobile from '../../assets/newbg/bg-mb2.webp'
 
@@ -109,6 +111,18 @@ export function MenuSection() {
 
   return (
     <motion.section id="menu" className="relative">
+      {/* Structured data reflects whatever's actually loaded — omitted
+          entirely until categories/items resolve, so it never ships an
+          empty or stale Menu schema. Google's crawler renders this SPA's JS
+          and waits on network idle, so the client-side injection here is
+          picked up the same as any other route-level Seo/Helmet call. */}
+      {categories && menuItems && (
+        <Helmet>
+          <script type="application/ld+json">
+            {JSON.stringify(menuJsonLd(categories, menuItems))}
+          </script>
+        </Helmet>
+      )}
       {/* No overflow-hidden here (removed) — these bg layers are exact
           inset-0 with no transform, so nothing bleeds without clipping,
           and an ancestor with overflow != visible would otherwise break

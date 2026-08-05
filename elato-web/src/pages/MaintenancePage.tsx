@@ -3,7 +3,7 @@ import elatoWordmark from '../assets/logos/elato-wordmark.webp'
 
 export function MaintenancePage() {
   return (
-    <main className="relative flex min-h-screen items-center overflow-hidden bg-surface-base pt-20">
+    <main id="main-content" className="relative flex min-h-screen items-center overflow-hidden bg-surface-base pt-20">
       <Helmet>
         <title>Under Maintenance | ELATŌ</title>
         <meta name="robots" content="noindex" />

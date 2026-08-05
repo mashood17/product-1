@@ -1,14 +1,16 @@
 import { LegalPageLayout, LegalSection } from '../components/legal/LegalPageLayout'
 import { businessInfo } from '../content/siteContent'
+import { getRouteSeo } from '../lib/routeSeo'
 
 const EFFECTIVE_DATE = 'July 21, 2026'
+const seo = getRouteSeo('/cookie-policy')
 
 export function CookiePolicyPage() {
   return (
     <LegalPageLayout
-      title="Cookie Policy"
-      description="How ELATŌ uses cookies and browser storage to run and improve elato.in."
-      path="/cookie-policy"
+      title={seo.title}
+      description={seo.description}
+      path={seo.path}
       effectiveDate={EFFECTIVE_DATE}
     >
       <p className="text-body text-neutral-warm-600">

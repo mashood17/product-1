@@ -15,8 +15,8 @@ interface LegalPageLayoutProps {
  * read as part of ELATŌ rather than a bolted-on boilerplate page. */
 export function LegalPageLayout({ title, description, path, effectiveDate, children }: LegalPageLayoutProps) {
   return (
-    <main className="relative min-h-screen bg-surface-base pb-24 pt-28 lg:pt-32">
-      <Seo title={title} description={description} path={path} />
+    <main id="main-content" className="relative min-h-screen bg-surface-base pb-24 pt-28 lg:pt-32">
+      <Seo title={title} description={description} path={path} breadcrumb={[{ name: title, path }]} />
       <div className="container-elato mx-auto max-w-3xl">
         <div className="mb-10 text-center">
           <p className="text-caption text-[#9E7641]">ELATŌ</p>

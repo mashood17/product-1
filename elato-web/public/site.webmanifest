@@ -1,0 +1,16 @@
+{
+  "name": "ELATŌ — Premium Café, Ice Cream, Events & Stay",
+  "short_name": "ELATŌ",
+  "description": "A premium lifestyle destination in Panemangalore, near Mangalore, Dakshina Kannada — desserts, artisan coffee, an event hall, and a boutique stay.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FDFBF7",
+  "theme_color": "#3A2E1E",
+  "lang": "en-IN",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

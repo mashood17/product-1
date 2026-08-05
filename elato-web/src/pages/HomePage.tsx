@@ -1,22 +1,20 @@
 import { Seo } from '../components/Seo'
-import { localBusinessJsonLd, organizationJsonLd } from '../lib/jsonLd'
+import { getRouteSeo } from '../lib/routeSeo'
 import { HeroServicesReveal } from '../components/sections/HeroServicesReveal'
 import { About } from '../components/sections/About'
 import { VideoShowcaseSection } from '../components/sections/VideoShowcaseSection'
 import { ReviewsSection } from '../components/sections/ReviewsSection'
+import { FaqSection } from '../components/sections/FaqSection'
 import { VisitSection } from '../components/sections/VisitSection'
 import { DeferredMount } from '../lib/DeferredMount'
+
+const seo = getRouteSeo('/')
 
 export function HomePage() {
   return (
     <>
-      <Seo
-        title="Where Every Celebration Begins"
-        description="ELATŌ — a premium lifestyle destination in Panemangalore combining handcrafted desserts, artisan coffee, an event hall, and a boutique stay."
-        path="/"
-        jsonLd={[localBusinessJsonLd(), organizationJsonLd()]}
-      />
-      <main>
+      <Seo title={seo.title} description={seo.description} path={seo.path} jsonLd={seo.jsonLd()} />
+      <main id="main-content">
         <HeroServicesReveal />
         <About />
         {/* Video Showcase/Reviews fetch data and set up their own Framer
@@ -31,6 +29,7 @@ export function HomePage() {
         <DeferredMount>
           <ReviewsSection />
         </DeferredMount>
+        <FaqSection />
         <VisitSection />
       </main>
     </>

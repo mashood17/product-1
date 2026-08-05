@@ -1,21 +1,24 @@
 import { Seo } from '../components/Seo'
-import { lodgingJsonLd } from '../lib/jsonLd'
+import { getRouteSeo } from '../lib/routeSeo'
 import { StayHeroReveal } from '../components/stay/StayHeroReveal'
 import { Amenities } from '../components/stay/Amenities'
 import { StayGallery } from '../components/stay/StayGallery'
 import { BookingEnquiry } from '../components/stay/BookingEnquiry'
 import { StickyWhatsAppBar } from '../components/stay/StickyWhatsAppBar'
 
+const seo = getRouteSeo('/elato-stay')
+
 export function StayPage() {
   return (
     <>
       <Seo
-        title="Elato Stay — 2BHK Premium Apartment"
-        description="A spacious 2BHK premium serviced apartment for 6–8 guests in Panemangalore — for family trips, wedding guests, business travelers, and vacation stays."
-        path="/elato-stay"
-        jsonLd={lodgingJsonLd()}
+        title={seo.title}
+        description={seo.description}
+        path={seo.path}
+        breadcrumb={seo.breadcrumb}
+        jsonLd={seo.jsonLd()}
       />
-      <main>
+      <main id="main-content">
         <StayHeroReveal />
         <Amenities />
         <StayGallery />

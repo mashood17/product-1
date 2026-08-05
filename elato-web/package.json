@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "postbuild": "tsx scripts/prerender.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
@@ -28,7 +29,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
-    "react-scan": "^0.5.7",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.3.2",
@@ -42,9 +42,11 @@
     "@vitest/coverage-v8": "^4.1.10",
     "jsdom": "^29.1.1",
     "oxlint": "^1.71.0",
+    "react-scan": "^0.5.7",
     "rollup-plugin-visualizer": "^7.0.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.8",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10"

@@ -60,6 +60,7 @@ export function Footer() {
             <li><Link to="/elato-stay" className="text-primary-100 transition-colors duration-300 ease-out hover:text-[#E7CAA0]">Stay</Link></li>
             <li><Link to="/elato-celebre" className="text-primary-100 transition-colors duration-300 ease-out hover:text-[#E7CAA0]">Celebré</Link></li>
             <li><Link to="/elato-events" className="text-primary-100 transition-colors duration-300 ease-out hover:text-[#E7CAA0]">Events</Link></li>
+            <li><a href={homeHash('#faq')} className="text-primary-100 transition-colors duration-300 ease-out hover:text-[#E7CAA0]">FAQ</a></li>
           </ul>
         </div>
 

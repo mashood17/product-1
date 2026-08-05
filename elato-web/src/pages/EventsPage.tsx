@@ -1,19 +1,22 @@
 import { Seo } from '../components/Seo'
-import { eventVenueJsonLd } from '../lib/jsonLd'
+import { getRouteSeo } from '../lib/routeSeo'
 import { EventsHeroReveal } from '../components/events/EventsHeroReveal'
 import { EventsGallery } from '../components/events/EventsGallery'
 import { EventsEnquiry } from '../components/events/EventsEnquiry'
+
+const seo = getRouteSeo('/elato-events')
 
 export function EventsPage() {
   return (
     <>
       <Seo
-        title="Elato Events — Weddings & Celebrations Hall"
-        description="A 200–250 guest hall in Panemangalore for weddings, engagements, birthdays, naming ceremonies, corporate events, and family gatherings."
-        path="/elato-events"
-        jsonLd={eventVenueJsonLd()}
+        title={seo.title}
+        description={seo.description}
+        path={seo.path}
+        breadcrumb={seo.breadcrumb}
+        jsonLd={seo.jsonLd()}
       />
-      <main>
+      <main id="main-content">
         <EventsHeroReveal />
         <EventsGallery />
         <EventsEnquiry />

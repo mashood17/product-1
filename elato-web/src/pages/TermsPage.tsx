@@ -1,14 +1,16 @@
 import { LegalPageLayout, LegalSection } from '../components/legal/LegalPageLayout'
 import { businessInfo } from '../content/siteContent'
+import { getRouteSeo } from '../lib/routeSeo'
 
 const EFFECTIVE_DATE = 'July 21, 2026'
+const seo = getRouteSeo('/terms-conditions')
 
 export function TermsPage() {
   return (
     <LegalPageLayout
-      title="Terms & Conditions"
-      description="The terms that govern your use of the ELATŌ website and our promotional offers."
-      path="/terms-conditions"
+      title={seo.title}
+      description={seo.description}
+      path={seo.path}
       effectiveDate={EFFECTIVE_DATE}
     >
       <p className="text-body text-neutral-warm-600">
