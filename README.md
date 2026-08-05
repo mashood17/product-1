@@ -39,7 +39,7 @@ Supabase Storage — 12 buckets for images and video, served as optimized public
 Custom JWT-based admin auth (not Supabase Auth) — the backend issues and verifies its own tokens; Supabase is used purely as a database and object store
 
 **Deployment**
-Render (backend, Python runtime) · Vercel (both frontends, static Vite builds)
+Railway (backend, Python runtime) · Vercel (both frontends, static Vite builds)
 
 **External integrations**
 Google Places API (reviews sync) · GA4 / Microsoft Clarity (optional analytics) · WhatsApp (`wa.me` links for enquiries)
@@ -56,7 +56,7 @@ Google Places API (reviews sync) · GA4 / Microsoft Clarity (optional analytics)
                           ▼
                 ┌───────────────────┐
                 │   elato-backend    │
-                │   FastAPI (Render) │
+                │  FastAPI (Railway) │
                 └─────────┬──────────┘
                           │ service-role key
                           ▼
@@ -103,7 +103,7 @@ Elato/
 │   └── migrations/             Ordered, hand-written SQL migration files (schema history)
 │
 ├── docs/                    Shared project documentation (PRD, etc.)
-├── render.yaml              Render deployment blueprint (backend)
+├── elato-backend/railway.json   Railway deployment blueprint (backend)
 └── elato-web/, elato-admin/vercel.json   Vercel deployment config (frontends)
 ```
 
@@ -226,9 +226,9 @@ Row-Level Security is enabled on **every** table. Two access patterns are used:
 
 The database and storage are provisioned once per environment. To promote schema changes, apply new files from `elato-backend/migrations/` in order against the target project.
 
-### Backend (Render)
+### Backend (Railway)
 
-Defined in [`render.yaml`](render.yaml) — Python runtime, Singapore region, auto-deploy from `main`. Real secrets are intentionally **not** stored in the blueprint (`sync: false` for every credential); they must be set once in the Render dashboard's Environment tab. See the Render checklist maintained alongside this repo for the exact variable list.
+Defined in [`elato-backend/railway.json`](elato-backend/railway.json) — Python (Nixpacks) runtime, auto-deploy from `main`. Real secrets are **not** committed to the repo; they're set once in the Railway dashboard's Variables tab per the list in [`elato-backend/.env.example`](elato-backend/.env.example).
 
 ### Frontends (Vercel)
 
@@ -267,7 +267,7 @@ Base path: `/api/v1`. Full interactive docs at `/docs` (FastAPI/OpenAPI).
 
 **Sync** (`/sync`, cron-secret header) — `POST /reviews` triggers the Google Places reviews aggregate sync
 
-**Health** — `GET /health`, unauthenticated, used by Render's health check
+**Health** — `GET /health`, unauthenticated, used by Railway's health check
 
 ## Future Improvements
 

@@ -14,7 +14,7 @@ Validate-first, small-by-design: each bucket has its own max source size
 (`_BUCKET_MAX_BYTES`, enforced in `_read_upload_capped` before a single byte
 reaches Pillow), so admins are expected to upload images that already meet
 web-delivery standards rather than relying on the server to compress huge
-sources down. This matters on a memory-constrained Render instance — a
+sources down. This matters on a memory-constrained Railway instance — a
 full-resolution decode + per-breakpoint copy + multi-format encode of an
 unbounded 20-50MB phone photo is what caused production OOMs before these
 caps existed; capping the source keeps every step cheap regardless of the
@@ -22,7 +22,7 @@ caps existed; capping the source keeps every step cheap regardless of the
 
 AVIF is kept (not dropped) for now: per the production upload audit, the
 size caps above should already be enough to keep memory/CPU bounded, so
-AVIF is only worth removing later if Render logs (see the per-step RSS/
+AVIF is only worth removing later if Railway logs (see the per-step RSS/
 timing instrumentation in `_process_and_store_sync`) actually show it as a
 significant cost once the caps are live — not pre-emptively.
 """
@@ -280,7 +280,7 @@ def _process_and_store_sync(
                 # AVIF (libavif/AV1 tooling) is meaningfully slower to encode
                 # than WebP/JPEG, and this is exactly the number the
                 # production upload audit flagged as worth re-measuring once
-                # the per-bucket size caps are live on Render — if these logs
+                # the per-bucket size caps are live on Railway — if these logs
                 # show it's still a significant share of per-upload time/RSS
                 # even on now-small, validated sources, that's the signal to
                 # drop it; best-effort either way (a failure here never fails

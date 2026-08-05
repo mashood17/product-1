@@ -2,11 +2,11 @@
 Shared production-instrumentation helpers: process RSS + step timing.
 
 Used by both the hero-video pipeline and the image upload pipeline so a
-slow or memory-heavy step can be diagnosed from Render logs alone — which
+slow or memory-heavy step can be diagnosed from Railway logs alone — which
 step it was, how long it took, and how much RSS it added or released.
 Extracted out of hero_video_service (where this was first built after a
 production OOM incident) once media_service needed the same instrumentation
-to decide, from real Render logs, whether AVIF encoding is worth its CPU
+to decide, from real Railway logs, whether AVIF encoding is worth its CPU
 cost — rather than duplicating the same two functions in both modules.
 """
 
@@ -23,7 +23,7 @@ def current_rss_kb() -> int | None:
     only ever grows and can't show memory being released). Linux-only by
     construction (`/proc` doesn't exist elsewhere); returns None off Linux —
     e.g. local Windows/macOS dev — so instrumentation degrades silently
-    instead of breaking non-production runs. Render's containers are Linux,
+    instead of breaking non-production runs. Railway's containers are Linux,
     so this is live data in the environment that actually OOMs."""
     try:
         with open("/proc/self/status", "rb") as f:

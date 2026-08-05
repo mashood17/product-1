@@ -14,7 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
-from app.core.exceptions import register_exception_handlers
+from app.core.exceptions import UnhandledExceptionMiddleware, register_exception_handlers
 from app.core.logging import configure_logging
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -34,8 +34,22 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ELATŌ API", version="0.0.0", lifespan=lifespan)
+# /docs, /redoc and the raw OpenAPI schema hand an attacker the full route
+# map for free — fine in dev, not something a production API should serve.
+app = FastAPI(
+    title="ELATŌ API",
+    version="0.0.0",
+    lifespan=lifespan,
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
+)
 
+# Added first so it ends up innermost (right next to the router, below
+# RequestLogging/SecurityHeaders/CORS/GZip) — see UnhandledExceptionMiddleware's
+# own docstring for why that position matters: an error response built
+# outside this layer never gets CORS/security headers applied.
+app.add_middleware(UnhandledExceptionMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(

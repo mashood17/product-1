@@ -63,17 +63,17 @@ default (fails fast at boot otherwise), but no test here makes a real
 Supabase call, so placeholder values are enough. Covers:
 
 - `test_health.py` — `/health` returns 200 and requires no auth (what
-  Render's health check actually probes).
+  Railway's health check actually probes).
 - `test_app_imports.py` — every `app/api/v1/*` route module imports cleanly,
   the FastAPI app builds, and routes beyond `/health` are registered. Catches
   boot-time breakage (bad import, router registration failure) that
   per-function unit tests wouldn't.
 
-## Deployment (Render)
+## Deployment (Railway)
 
-`render.yaml` at the repo root defines the Render blueprint: Python runtime,
+`railway.json` defines the Railway service: Nixpacks Python build,
 `pip install -r requirements.txt`, `uvicorn app.main:app --host 0.0.0.0
---port $PORT`, health check at `/health`. Every real secret
-(`JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, etc.) is declared with
-`sync: false` so the blueprint never carries actual values — set them for
-real in the Render dashboard's Environment tab per service.
+--port $PORT --proxy-headers --forwarded-allow-ips='*'`, health check at
+`/health`. Every real secret (`JWT_SECRET`, `SUPABASE_URL`,
+`SUPABASE_SECRET_KEY`, etc.) is set directly in the Railway dashboard's
+Variables tab per the list in `.env.example` — none are committed to the repo.

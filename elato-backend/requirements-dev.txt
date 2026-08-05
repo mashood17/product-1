@@ -1,4 +1,4 @@
 # Test-only dependencies — kept separate from requirements.txt so the
-# production/Render install never pulls in test tooling.
+# production/Railway install never pulls in test tooling.
 -r requirements.txt
 pytest>=8.3

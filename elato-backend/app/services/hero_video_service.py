@@ -20,7 +20,7 @@ Everything here is disk-backed, not RAM-backed: the incoming upload is
 stream-copied to a temp file (never held as one big `bytes` object), ffmpeg
 (when it runs) reads/writes temp files directly, and the stored result is
 uploaded from an open file handle. This matters on a memory-constrained
-Render instance — see the module-level comment on
+Railway instance — see the module-level comment on
 `_process_and_upload_hero_video` for the incident this was fixed after.
 
 Deliberately structured so that changes: everything that inspects or
@@ -99,7 +99,7 @@ _ENCODE_PRESET = "medium"
 _TRANSCODE_TIMEOUT_SECONDS = 180
 # Fixed, small thread count rather than ffmpeg's auto-detected default. This
 # is a memory fix, not just a CPU one: libx264 allocates per-thread frame/
-# lookahead buffers, and on a cgroup-limited container (Render's smaller
+# lookahead buffers, and on a cgroup-limited container (Railway's smaller
 # plans report a fractional CPU quota, e.g. 0.5) auto-detection can still see
 # the *host's* full core count and size buffers for threads it will never
 # get meaningful scheduling time on — paying the memory cost of parallelism
@@ -229,7 +229,7 @@ def _transcode_to_h264(source_path: Path, out_path: Path, slot: str) -> None:
     def` route/service. Only reached when `_needs_transcode` is True, i.e.
     the source isn't already browser-compatible. Re-encodes to H.264 MP4 via
     the static ffmpeg binary `imageio-ffmpeg` bundles in its wheel (no system
-    `apt install ffmpeg` — works the same on Render's build image as it does
+    `apt install ffmpeg` — works the same on Railway's build image as it does
     locally). Reads `source_path` and writes `out_path` directly — ffmpeg
     does its own disk I/O as a separate OS process; nothing here touches
     Python-heap memory for the video bytes themselves.
@@ -366,7 +366,7 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
 
     Conditional transcode: per the production upload audit, re-encoding
     *every* upload through ffmpeg was what made hero uploads slow (CRF-
-    quality libx264 on Render's CPU-throttled Starter plan) even though most
+    quality libx264 on a CPU-throttled instance) even though most
     admin-exported clips are already H.264 MP4 and need no re-encoding at
     all for browser playback. `_needs_transcode` (checked against the real
     stream headers via PyAV, not the file extension) decides per-upload: an

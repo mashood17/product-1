@@ -4,7 +4,7 @@ Simple in-memory sliding-window rate limiter for auth-sensitive endpoints
 brute force since they gate account access or a shared secret.
 
 Single-process, in-memory only. That's sufficient for the current
-single-instance Render deployment; if the app ever scales to multiple
+single-instance Railway deployment; if the app ever scales to multiple
 instances the counters won't be shared across them and this must move to a
 shared store (e.g. Redis) instead.
 """

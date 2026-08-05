@@ -1,7 +1,7 @@
 """
 Scheduled sync endpoint for the Google Reviews cache (Section 9 — "a simple
 cron-triggered endpoint... is sufficient at this scale"). Trigger via
-Render's scheduled job feature hitting this with the shared secret header;
+Railway's cron schedule feature hitting this with the shared secret header;
 not exposed to admins or the public.
 """
 

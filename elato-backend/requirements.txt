@@ -17,5 +17,5 @@ av>=13.0
 # (app/services/hero_video_service.py's `_needs_transcode`) — ships a static,
 # pre-built ffmpeg binary per-platform inside the wheel itself, so `pip install`
 # alone is enough; no `apt install ffmpeg` / system package / Dockerfile change
-# needed, which matters on Render's native Python runtime (no root/apt access).
+# needed, which matters on Railway's native Python runtime (no root/apt access).
 imageio-ffmpeg>=0.5

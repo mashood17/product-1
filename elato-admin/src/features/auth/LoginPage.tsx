@@ -61,7 +61,6 @@ export function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="owner@elato.in"
             />
             <div className="relative">
               <Input

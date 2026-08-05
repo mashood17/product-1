@@ -2,7 +2,7 @@ name: CI
 
 # Runs on every PR and every push to main. This is the workflow a
 # required-status-check branch protection rule on `main` should point at —
-# no deploy jobs live here; Vercel (elato-web, elato-admin) and Render
+# no deploy jobs live here; Vercel (elato-web, elato-admin) and Railway
 # (elato-backend) deploy on push to main independently, outside GitHub
 # Actions (see Section 12 of the project spec / each app's README).
 

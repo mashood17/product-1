@@ -1,8 +1,18 @@
 from typing import Any
 
+from postgrest.exceptions import APIError
+
+from app.core.exceptions import AppError
 from app.repositories.base import client, unwrap_single
 
 TABLE = "admins"
+
+# Postgres foreign-key-violation SQLSTATE. Media/site-content/hero-background/
+# offer-registration/video-gallery rows reference admins(id) with
+# ON DELETE SET NULL (migrations/0015_admin_fk_delete_set_null.sql) so this
+# shouldn't fire in normal operation — this is a defensive fallback for a
+# project whose DB hasn't picked up that migration yet, not the primary fix.
+_FOREIGN_KEY_VIOLATION = "23503"
 
 
 def get_by_email(email: str) -> dict[str, Any] | None:
@@ -39,4 +49,13 @@ def list_all() -> list[dict[str, Any]]:
 
 
 def delete(admin_id: str) -> None:
-    client().table(TABLE).delete().eq("id", admin_id).execute()
+    try:
+        client().table(TABLE).delete().eq("id", admin_id).execute()
+    except APIError as exc:
+        if getattr(exc, "code", None) == _FOREIGN_KEY_VIOLATION:
+            raise AppError(
+                code="admin_has_related_records",
+                message="This admin created content that still references them and can't be deleted yet.",
+                status_code=409,
+            ) from exc
+        raise
