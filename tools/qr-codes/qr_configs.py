@@ -20,7 +20,12 @@ QR_OUTPUT_DIR = REPO_ROOT / "assets" / "qr"
 # Celebré page's #menu section — same destination as the site's own
 # "Our Menu" nav button — so it opens directly with no intermediate
 # redirect hop.
-MENU_URL = "https://elatogroups.in/elato-celebre#menu"
+#
+# www, not the bare apex: Vercel 308-redirects elatogroups.in ->
+# www.elatogroups.in (same reasoning as SITE_URL in
+# elato-web/src/lib/seoConfig.ts), so the QR must point straight at the
+# final URL rather than one that itself redirects.
+MENU_URL = "https://www.elatogroups.in/elato-celebre#menu"
 
 MENU_QR = QRConfig(
     url=MENU_URL,
@@ -28,5 +33,5 @@ MENU_QR = QRConfig(
 )
 
 # Future destinations, e.g.:
-# STAY_URL = "https://elatogroups.in/elato-stay"
+# STAY_URL = "https://www.elatogroups.in/elato-stay"
 # STAY_QR = QRConfig(url=STAY_URL, output_path=QR_OUTPUT_DIR / "stay-qr.png")
