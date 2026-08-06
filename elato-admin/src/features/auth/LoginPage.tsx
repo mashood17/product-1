@@ -5,6 +5,7 @@ import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Button, Input } from "../../components/ui";
 import { errorMessage } from "../../lib/query-client";
+import { Logo } from "../../components/brand/Logo";
 
 export function LoginPage() {
   const { login, status } = useAuth();
@@ -44,7 +45,7 @@ export function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-9 text-center">
-          <p className="font-display text-3xl font-semibold tracking-[0.25em] text-neutral-900">ELATŌ</p>
+          <Logo height={40} className="mx-auto" />
           <p className="mt-2 text-sm text-neutral-500">Sign in to the admin panel</p>
         </div>
 
