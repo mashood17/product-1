@@ -93,7 +93,7 @@ export function ItemDetailModal({ itemId, onClose }: { itemId: string | null; on
                   aria-hidden="true"
                 >
                   {item.imageUrl && (
-                    <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
                   )}
                 </div>
                 <div className="p-6 lg:p-8">

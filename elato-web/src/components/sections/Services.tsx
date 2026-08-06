@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { motion } from 'framer-motion'
 import { ServiceCard } from '../ui/ServiceCard'
-import { servicesContent } from '../../content/siteContent'
+import { servicesContent, servicesHeading } from '../../content/siteContent'
 import { serviceImages, serviceImageKeys } from '../../content/serviceImages'
 import { useSiteImages } from '../../lib/useSiteImage'
 import { useSectionExitFade } from '../../lib/useSectionExitFade'
@@ -205,6 +205,12 @@ export function Services() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-48 bg-gradient-to-b from-[#2C2318]/60 to-transparent"
       />
+
+      {/* Visually hidden — the carousel is deliberately heading-free (see
+          file header comment), but the section still needs a real h2 so the
+          page's heading order doesn't jump from the h1 straight to each
+          card's h3. */}
+      <h2 className="sr-only">{servicesHeading.title}</h2>
 
       <div
         ref={entrance.ref}

@@ -21,6 +21,8 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ de
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })))
 const TermsPage = lazy(() => import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })))
 const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage').then((m) => ({ default: m.CookiePolicyPage })))
+const BlogIndexPage = lazy(() => import('./pages/BlogIndexPage').then((m) => ({ default: m.BlogIndexPage })))
+const BlogPostPage = lazy(() => import('./pages/BlogPostPage').then((m) => ({ default: m.BlogPostPage })))
 
 function RouteFallback() {
   return <div className="min-h-screen bg-surface-base" aria-hidden="true" />
@@ -237,6 +239,8 @@ function App() {
               <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="/terms-conditions" element={<TermsPage />} />
               <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+              <Route path="/blog" element={<BlogIndexPage />} />
+              <Route path="/blog/:slug" element={<BlogPostPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>

@@ -28,7 +28,7 @@ export function SpecialDetailModal({ special, onClose }: { special: Special | nu
             aria-hidden="true"
           >
             {special.imageUrl && (
-              <img src={special.imageUrl} alt="" className="h-full w-full object-cover" />
+              <img src={special.imageUrl} alt={special.name} className="h-full w-full object-cover" />
             )}
           </div>
           <div className="p-6 lg:p-8">

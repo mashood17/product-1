@@ -1,5 +1,5 @@
 import { SITE_URL, SITE_NAME, DEFAULT_OG_IMAGE } from './seoConfig'
-import { businessInfo, aggregateRating } from '../content/siteContent'
+import { businessInfo, aggregateRating, founder, aboutContent } from '../content/siteContent'
 import { reviewsFallback } from '../content/reviewsContent'
 
 const address = {
@@ -67,7 +67,7 @@ const reviewSchema = reviewsFallback
 
 const logoImage = {
   '@type': 'ImageObject',
-  url: `${SITE_URL}/icons/icon-512.png`,
+  url: `${SITE_URL}/android-chrome-512x512.png`,
   width: 512,
   height: 512,
 }
@@ -116,8 +116,8 @@ export function restaurantJsonLd() {
     '@id': `${SITE_URL}/elato-celebre/#restaurant`,
     name: 'ELATŌ Celebré',
     description:
-      'Handcrafted ice cream, artisan coffee, signature mocktails, and premium desserts in Panemangalore, Bantwal — near Mangalore, Dakshina Kannada.',
-    servesCuisine: ['Ice Cream', 'Desserts', 'Coffee', 'Beverages'],
+      'Handcrafted ice cream, shakes, and mojitos, alongside fries, sandwiches, burgers, and pizzas, in Panemangalore, Bantwal — near Mangalore, Dakshina Kannada.',
+    servesCuisine: ['Ice Cream', 'Shakes', 'Mocktails', 'Fast Food'],
     telephone: businessInfo.phone,
     image: defaultOgImageObject,
     address,
@@ -180,6 +180,12 @@ export function organizationJsonLd() {
     logo: logoImage,
     image: defaultOgImageObject,
     foundingLocation: { '@type': 'Place', name: 'Panemangalore, Bantwal, Dakshina Kannada, Karnataka' },
+    // Real founder bio (siteContent.ts's `founder` export, client-supplied)
+    // and the real "Global Icon Awards 2026" win (aboutContent.achievement)
+    // — both already displayed on-page in About.tsx, just not previously
+    // in structured data. E-E-A-T signals, not invented for markup's sake.
+    founder: { '@type': 'Person', name: founder.name, description: founder.bio },
+    award: `${aboutContent.achievement.eyebrow}: ${aboutContent.achievement.title}`,
     sameAs,
     contactPoint: {
       '@type': 'ContactPoint',
@@ -201,6 +207,17 @@ export function websiteJsonLd() {
     url: SITE_URL,
     publisher: { '@id': `${SITE_URL}/#organization` },
     inLanguage: 'en-IN',
+    // Backed by a real feature — the search box on /blog (BlogIndexPage)
+    // filters posts by the same `q` query param this targets. Schema must
+    // describe a real capability, not an aspirational one.
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${SITE_URL}/blog?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
   }
 }
 
@@ -282,6 +299,59 @@ export function menuJsonLd(categories: MenuJsonLdCategory[], items: MenuJsonLdIt
           },
         })),
     })),
+  }
+}
+
+export interface BlogPostingInput {
+  title: string
+  description: string
+  path: string
+  publishedDate: string
+}
+
+/** One BlogPosting per post (see BlogPostPage.tsx) — author/publisher tie back to the same real Organization/founder every other schema on the site uses. */
+export function blogPostingJsonLd(post: BlogPostingInput) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    '@id': `${SITE_URL}${post.path}/#article`,
+    headline: post.title,
+    description: post.description,
+    url: `${SITE_URL}${post.path}`,
+    datePublished: post.publishedDate,
+    dateModified: post.publishedDate,
+    inLanguage: 'en-IN',
+    author: { '@type': 'Person', name: founder.name },
+    publisher: { '@id': `${SITE_URL}/#organization` },
+    image: defaultOgImageObject,
+    isPartOf: { '@id': `${SITE_URL}/blog#blog` },
+  }
+}
+
+export interface BlogIndexInput {
+  posts: { title: string; path: string; publishedDate: string }[]
+}
+
+/** Blog index (`/blog`) — CollectionPage + ItemList of every post, so the index itself carries real structured data, not just each individual post. */
+export function blogJsonLd({ posts }: BlogIndexInput) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': `${SITE_URL}/blog#blog`,
+    name: 'The ELATŌ Journal',
+    url: `${SITE_URL}/blog`,
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+    about: { '@id': `${SITE_URL}/#organization` },
+    inLanguage: 'en-IN',
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: posts.map((post, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: `${SITE_URL}${post.path}`,
+        name: post.title,
+      })),
+    },
   }
 }
 

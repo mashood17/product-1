@@ -5,6 +5,10 @@ import { Amenities } from '../components/stay/Amenities'
 import { StayGallery } from '../components/stay/StayGallery'
 import { BookingEnquiry } from '../components/stay/BookingEnquiry'
 import { StickyWhatsAppBar } from '../components/stay/StickyWhatsAppBar'
+import { FaqSection } from '../components/sections/FaqSection'
+import { ExploreMore } from '../components/sections/ExploreMore'
+import { FromTheBlog } from '../components/sections/FromTheBlog'
+import { stayFaqHeading, stayFaqItems } from '../content/faqContent'
 
 const seo = getRouteSeo('/elato-stay')
 
@@ -22,6 +26,9 @@ export function StayPage() {
         <StayHeroReveal />
         <Amenities />
         <StayGallery />
+        <FaqSection heading={stayFaqHeading} items={stayFaqItems} />
+        <FromTheBlog servicePath="/elato-stay" />
+        <ExploreMore currentPath="/elato-stay" />
         <BookingEnquiry />
         <StickyWhatsAppBar />
       </main>

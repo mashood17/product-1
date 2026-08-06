@@ -99,7 +99,7 @@ export const CategoryRow = memo(function CategoryRow({
               aria-hidden="true"
             >
               {category.imageUrl && (
-                <img src={category.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+                <img src={category.imageUrl} alt={category.name} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
               )}
               <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-lg" />
               <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-secondary-900/15 blur-lg" />

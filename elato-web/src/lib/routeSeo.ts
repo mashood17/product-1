@@ -17,9 +17,12 @@ import {
   restaurantJsonLd,
   lodgingJsonLd,
   eventVenueJsonLd,
+  blogPostingJsonLd,
+  blogJsonLd,
   type BreadcrumbItem,
 } from './jsonLd'
-import { faqItems } from '../content/faqContent'
+import { faqItems, celebreFaqItems, eventsFaqItems, stayFaqItems } from '../content/faqContent'
+import { blogPosts, blogHeading } from '../content/blogContent'
 
 export interface RouteSeoEntry {
   path: string
@@ -29,12 +32,46 @@ export interface RouteSeoEntry {
   jsonLd: () => object | object[]
 }
 
+// Generated from blogContent.ts — blogPosts is the single source of truth,
+// so a new post only ever needs adding there, never duplicated here.
+const blogIndexEntry: RouteSeoEntry = {
+  path: '/blog',
+  title: blogHeading.title,
+  description: blogHeading.description,
+  breadcrumb: [{ name: 'Blog', path: '/blog' }],
+  jsonLd: () =>
+    blogJsonLd({
+      posts: blogPosts.map((post) => ({
+        title: post.title,
+        path: `/blog/${post.slug}`,
+        publishedDate: post.publishedDate,
+      })),
+    }),
+}
+
+const blogPostEntries: RouteSeoEntry[] = blogPosts.map((post) => ({
+  path: `/blog/${post.slug}`,
+  title: post.title,
+  description: post.metaDescription,
+  breadcrumb: [
+    { name: 'Blog', path: '/blog' },
+    { name: post.title, path: `/blog/${post.slug}` },
+  ],
+  jsonLd: () =>
+    blogPostingJsonLd({
+      title: post.title,
+      description: post.metaDescription,
+      path: `/blog/${post.slug}`,
+      publishedDate: post.publishedDate,
+    }),
+}))
+
 export const routeSeoRegistry: RouteSeoEntry[] = [
   {
     path: '/',
     title: 'Premium Café, Ice Cream, Events & Stay in Panemangalore, Mangalore',
     description:
-      'ELATŌ — a premium lifestyle destination in Panemangalore, Bantwal, near Mangalore, Dakshina Kannada. Handcrafted desserts, artisan coffee, an event hall for weddings and birthdays, and a boutique stay.',
+      'ELATŌ — a premium lifestyle destination in Panemangalore, Bantwal, near Mangalore, Dakshina Kannada. Handcrafted ice cream and desserts, an event hall for weddings and birthdays, and a luxury stay.',
     jsonLd: () => [
       localBusinessJsonLd(),
       organizationJsonLd(),
@@ -44,28 +81,30 @@ export const routeSeoRegistry: RouteSeoEntry[] = [
   },
   {
     path: '/elato-stay',
-    title: 'Elato Stay — 2BHK Premium Apartment Near Mangalore',
+    title: 'Elato Stay — Luxury 2BHK Apartment in Bantwal, Mangalore',
     description:
       'A spacious 2BHK premium serviced apartment for 6–8 guests in Panemangalore, Bantwal — near Mangalore, Dakshina Kannada. Ideal for family trips, wedding guests, business travelers, and vacation stays.',
     breadcrumb: [{ name: 'Elato Stay', path: '/elato-stay' }],
-    jsonLd: () => lodgingJsonLd(),
+    jsonLd: () => [lodgingJsonLd(), faqJsonLd(stayFaqItems)],
   },
   {
     path: '/elato-celebre',
-    title: 'Elato Celebré — Premium Café, Ice Cream & Desserts Near Mangalore',
+    title: 'Elato Celebré — Premium Café, Ice Cream & Desserts in Bantwal, Mangalore',
     description:
-      'Handcrafted ice cream, artisan coffee, signature mocktails, and premium desserts at ELATŌ Celebré in Panemangalore, Bantwal — near Mangalore and BC Road. Order on WhatsApp.',
+      'Handcrafted ice cream, milkshakes, and mojitos, plus fries, sandwiches, burgers, and pizzas, at ELATŌ Celebré in Panemangalore, Bantwal — near Mangalore and BC Road. Order on WhatsApp.',
     breadcrumb: [{ name: 'Elato Celebré', path: '/elato-celebre' }],
-    jsonLd: () => restaurantJsonLd(),
+    jsonLd: () => [restaurantJsonLd(), faqJsonLd(celebreFaqItems)],
   },
   {
     path: '/elato-events',
-    title: 'Elato Events — Wedding & Birthday Venue Near Mangalore',
+    title: 'Elato Events — Wedding & Birthday Venue in Bantwal, Mangalore',
     description:
       'A 200–250 guest hall in Panemangalore, Bantwal — near Mangalore, Dakshina Kannada — for weddings, engagements, birthdays, naming ceremonies, corporate events, and family gatherings.',
     breadcrumb: [{ name: 'Elato Events', path: '/elato-events' }],
-    jsonLd: () => eventVenueJsonLd(),
+    jsonLd: () => [eventVenueJsonLd(), faqJsonLd(eventsFaqItems)],
   },
+  blogIndexEntry,
+  ...blogPostEntries,
   {
     path: '/privacy-policy',
     title: 'Privacy Policy',

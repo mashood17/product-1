@@ -273,7 +273,7 @@ export function EventsEnquiry() {
           <div className="relative aspect-4/5 w-full max-w-sm overflow-hidden rounded-[36px] rounded-br-[110px] border-[10px] border-secondary-900 ring-4 ring-surface-elevated shadow-elato-lg mx-auto lg:mx-0 lg:aspect-auto lg:h-full lg:max-w-none lg:rounded-[48px] lg:rounded-br-[150px] lg:border-[14px]">
             <SiteImage
               src={planImage}
-              alt="An event hosted at ELATŌ"
+              alt="ELATŌ's event hall in Panemangalore, ready to host your celebration"
               className="h-full w-full object-cover"
             />
             <div

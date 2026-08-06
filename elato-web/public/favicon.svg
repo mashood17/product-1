@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="ELATŌ">
-  <rect width="48" height="48" rx="10" fill="#3A2E1E"/>
-  <circle cx="24" cy="27" r="11" fill="none" stroke="#F3EEE1" stroke-width="4.5"/>
-  <rect x="16" y="8" width="16" height="4" rx="2" fill="#A3917C"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-label="ELATŌ">
+  <g transform="translate(-630,-36.5)">
+    <path fill="#A97C22" fill-rule="evenodd" d="M790,128 a87,92 0 1,1 -0.1,0 Z M790,158 a57,62 0 1,0 0.1,0 Z"/>
+    <rect fill="#AFA189" x="755" y="81" width="70" height="22" rx="3"/>
+  </g>
 </svg>

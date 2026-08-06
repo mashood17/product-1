@@ -70,7 +70,7 @@ export function EventExperience() {
             <div className="relative h-full w-full overflow-hidden rounded-[36px] rounded-bl-[110px] border-[10px] border-secondary-900 ring-4 ring-surface-elevated shadow-elato-lg lg:rounded-[48px] lg:rounded-bl-[150px] lg:border-[14px]">
               <SiteImage
                 src={imageSrc}
-                alt="An event hosted at ELATŌ"
+                alt="The ELATŌ Events hall, set up for a celebration"
                 className="h-full w-full object-cover"
               />
             </div>
