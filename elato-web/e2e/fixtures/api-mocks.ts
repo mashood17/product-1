@@ -137,6 +137,21 @@ export async function mockAnalyticsApi(page: Page) {
   await page.route('**/api/v1/analytics/events', (route) => route.fulfill({ status: 204, body: '' }))
 }
 
+/** GET /api/v1/maintenance-status — App.tsx's useMaintenanceMode gates the
+ * entire public site behind this call on mount. Left unmocked, it falls
+ * through to the real (absent) backend and only resolves once apiClient's
+ * request timeout fires, so every spec pays that timeout before anything
+ * renders. */
+export async function mockMaintenanceApi(page: Page) {
+  await page.route('**/api/v1/maintenance-status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ enabled: false }),
+    }),
+  )
+}
+
 export async function mockAllApi(page: Page) {
   await Promise.all([
     mockCelebreApi(page),
@@ -144,5 +159,6 @@ export async function mockAllApi(page: Page) {
     mockHomeApi(page),
     mockEnquiriesApi(page),
     mockAnalyticsApi(page),
+    mockMaintenanceApi(page),
   ])
 }

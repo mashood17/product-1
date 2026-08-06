@@ -14,8 +14,12 @@ test.describe('Accessibility (axe-core)', () => {
       // actually be audited for accessibility.
       await mockAllApi(page)
       await page.goto(route)
-      // Let route-level lazy chunks and content finish mounting.
-      await page.waitForLoadState('networkidle')
+      // `networkidle` is explicitly discouraged by Playwright (SPAs with
+      // animation libraries/background polling can keep the network
+      // "active" indefinitely, timing this out) — wait for the actual
+      // landmark instead, which is what an assistive-tech user would
+      // treat as "the page has content" anyway.
+      await page.getByRole('main').waitFor({ state: 'visible' })
 
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

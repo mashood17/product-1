@@ -15,6 +15,13 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
 const isMisconfigured = !configuredBaseUrl && import.meta.env.PROD
 const API_BASE_URL = configuredBaseUrl ?? 'http://localhost:8000'
 
+// A stalled connection (backend hung, DNS black hole, etc.) leaves `fetch`
+// pending forever with no rejection — for gating calls like the maintenance
+// check (App.tsx useMaintenanceMode), that freezes the entire public site on
+// its loading fallback with no way to recover. Every request gets a hard
+// upper bound so a backend hiccup always resolves to a typed error instead.
+const REQUEST_TIMEOUT_MS = 15_000
+
 export class ApiError extends Error {
   code: string
   status: number
@@ -31,13 +38,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError('config_error', 'API base URL is not configured for this deployment.', 0)
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
+
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: init?.signal ?? timeoutController.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError('timeout', 'The request took too long to respond.', 0)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (res.status === 204) return undefined as T
 

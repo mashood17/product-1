@@ -5,6 +5,8 @@ Railway's cron schedule feature hitting this with the shared secret header;
 not exposed to admins or the public.
 """
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header
 
 from app.core.config import get_settings
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 
 def _check_cron_secret(x_cron_secret: str | None) -> None:
     settings = get_settings()
-    if not x_cron_secret or x_cron_secret != settings.sync_cron_secret:
+    if not x_cron_secret or not secrets.compare_digest(x_cron_secret, settings.sync_cron_secret):
         raise UnauthorizedError("Invalid or missing cron secret.")
 
 
