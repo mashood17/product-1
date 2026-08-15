@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, Volume2, VolumeX } from 'lucide-react'
-import { useInView } from '../../lib/useInView'
 import { InstagramVerifiedBadge } from './InstagramVerifiedBadge'
 import elatoWordmark from '../../assets/logos/elato-wordmark.webp'
 import type { VideoGalleryItem } from '../../lib/videoGalleryRepository'
@@ -50,13 +49,7 @@ export function VideoShowcaseCard({
 }) {
   const reduceMotion = useReducedMotion()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const { ref: inViewRef, inView } = useInView<HTMLDivElement>('300px 0px')
   const [muted, setMuted] = useState(true)
-  const [hasLoaded, setHasLoaded] = useState(false)
-
-  useEffect(() => {
-    if (inView) setHasLoaded(true)
-  }, [inView])
 
   useEffect(() => {
     const el = videoRef.current
@@ -71,7 +64,7 @@ export function VideoShowcaseCard({
       el.currentTime = 0
       setMuted(true)
     }
-  }, [isActive, hasLoaded])
+  }, [isActive])
 
   // Belt-and-suspenders for the `loop` attribute: some mobile browsers can
   // fail to auto-restart on end (freezing on the last frame) when playback
@@ -89,7 +82,6 @@ export function VideoShowcaseCard({
 
   return (
     <div
-      ref={inViewRef}
       className="w-[68vw] max-w-[240px] flex-none snap-center sm:w-[220px] lg:w-[212px]"
       style={{ zIndex: depth.z }}
     >
@@ -121,7 +113,7 @@ export function VideoShowcaseCard({
             : 'cursor-pointer border-[#E7CAA0]/10 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.5)]'
         }`}
       >
-        {hasLoaded && (
+        {isActive && (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
             ref={videoRef}
