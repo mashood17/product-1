@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     supabase_url: str = Field(alias="SUPABASE_URL")
     supabase_secret_key: str = Field(alias="SUPABASE_SECRET_KEY")
 
+    # Cloudflare R2 object storage
+    r2_account_id: str = Field(alias="R2_ACCOUNT_ID")
+    r2_access_key_id: str = Field(alias="R2_ACCESS_KEY_ID")
+    r2_secret_access_key: str = Field(alias="R2_SECRET_ACCESS_KEY")
+    r2_bucket_name: str = Field(alias="R2_BUCKET_NAME")
+    r2_endpoint_url: str = Field(alias="R2_ENDPOINT_URL")
+    r2_public_base_url: str = Field(alias="R2_PUBLIC_BASE_URL")
+
     whatsapp_business_number: str = Field(default="+919731400313", alias="WHATSAPP_BUSINESS_NUMBER")
 
     # Per-bucket image size caps (app/services/media_service.py's

@@ -40,8 +40,8 @@ from fastapi import UploadFile
 import pillow_avif  # noqa: F401  registers the AVIF codec with Pillow on import
 from app.core.exceptions import AppError
 from app.core.upload_tolerance import image_budget
-from app.db import get_supabase
 from app.repositories import media_repository
+from app.services import r2_storage
 from app.utils.perf import timed_step
 
 logger = logging.getLogger("elato.media_cleanup")
@@ -104,7 +104,7 @@ def public_url_for(bucket: str | None, storage_path: str | None) -> str | None:
     """
     if not bucket or not storage_path:
         return None
-    return get_supabase().storage.from_(bucket).get_public_url(storage_path)
+    return r2_storage.public_url(bucket, storage_path)
 
 
 def pop_embedded_media_url(row: dict) -> str | None:
@@ -135,8 +135,10 @@ def responsive_srcset_for(bucket: str | None, storage_path: str | None) -> str |
         (f"{stem}/sm.webp", _BREAKPOINTS["sm"]),
         (f"{stem}/lg.webp", _BREAKPOINTS["lg"]),
     ]
-    storage = get_supabase().storage.from_(bucket)
-    return ", ".join(f"{storage.get_public_url(path)} {width}w" for path, width in parts)
+    return ", ".join(
+        f"{r2_storage.public_url(bucket, path)} {width}w"
+        for path, width in parts
+    )
 
 
 def pop_embedded_media_srcset(row: dict) -> str | None:
@@ -247,7 +249,6 @@ def _process_and_store_sync(
     # encode steps below consult EXIF.
     source = ImageOps.exif_transpose(source)
 
-    supabase = get_supabase()
     stem = uuid.uuid4().hex
     variants: list[StoredVariant] = []
     canonical_path = ""
@@ -267,11 +268,15 @@ def _process_and_store_sync(
                     for fmt, ext, content_type in (("WEBP", "webp", "image/webp"), ("JPEG", "jpg", "image/jpeg")):
                         encoded = _encode(resized, fmt)
                         path = f"{stem}/{label}.{ext}"
-                        supabase.storage.from_(bucket).upload(
-                            path, encoded, {"content-type": content_type, "cache-control": "31536000"}
+                        r2_storage.upload_file(
+                            logical_bucket=bucket,
+                            storage_path=path,
+                            file=encoded,
+                            content_type=content_type,
+                            cache_control="31536000",
                         )
                         uploaded_paths.append(path)
-                        public_url = supabase.storage.from_(bucket).get_public_url(path)
+                        public_url = r2_storage.public_url(bucket, path)
                         variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format=fmt.lower()))
                         if label == "lg" and fmt == "WEBP":
                             canonical_path = path
@@ -289,11 +294,15 @@ def _process_and_store_sync(
                     with timed_step(logger, tag, f"encode_avif_{label}"):
                         avif_encoded = _encode(resized, "AVIF")
                         avif_path = f"{stem}/{label}.avif"
-                        supabase.storage.from_(bucket).upload(
-                            avif_path, avif_encoded, {"content-type": "image/avif", "cache-control": "31536000"}
+                        r2_storage.upload_file(
+                            logical_bucket=bucket,
+                            storage_path=avif_path,
+                            file=avif_encoded,
+                            content_type="image/avif",
+                            cache_control="31536000",
                         )
                         uploaded_paths.append(avif_path)
-                        public_url = supabase.storage.from_(bucket).get_public_url(avif_path)
+                        public_url = r2_storage.public_url(bucket, avif_path)
                         variants.append(StoredVariant(url=public_url, width=resized.width, height=resized.height, format="avif"))
                 except Exception:
                     pass  # AVIF is best-effort; WebP/JPEG fallback above always succeeds — never rolled back for.
@@ -317,7 +326,7 @@ def _process_and_store_sync(
     except Exception:
         if uploaded_paths:
             try:
-                supabase.storage.from_(bucket).remove(uploaded_paths)
+                r2_storage.delete_files(bucket, uploaded_paths)
             except Exception as cleanup_exc:
                 # Cleanup itself failing is logged, not raised — the original
                 # error is what the caller needs to see; a dangling variant
@@ -360,7 +369,7 @@ def delete_image_variants(bucket: str | None, storage_path: str | None) -> None:
     if not bucket or not storage_path:
         return
     try:
-        get_supabase().storage.from_(bucket).remove(_variant_paths(storage_path))
+        r2_storage.delete_files(bucket, _variant_paths(storage_path))
     except Exception as exc:
         logger.error(f"Failed to delete Storage files at {bucket}/{storage_path} — left in place for manual cleanup: {exc}")
 
@@ -385,7 +394,10 @@ def delete_media(media_id: str | None) -> None:
         return
 
     try:
-        get_supabase().storage.from_(row["bucket"]).remove(_variant_paths(row["storage_path"]))
+        r2_storage.delete_files(
+            row["bucket"],
+            _variant_paths(row["storage_path"]),
+        )
     except Exception as exc:
         logger.error(
             f"Failed to delete Storage files for replaced media {media_id} "

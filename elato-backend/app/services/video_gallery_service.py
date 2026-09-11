@@ -26,8 +26,8 @@ from fastapi import UploadFile
 
 from app.core.exceptions import AppError, NotFoundError
 from app.core.upload_tolerance import video_budget
-from app.db import get_supabase
 from app.repositories import video_gallery_repository
+from app.services import r2_storage
 
 BUCKET = "video-gallery"
 
@@ -99,7 +99,7 @@ def _normalize_instagram_url(url: str | None) -> str | None:
 
 def _delete_storage_object(path: str) -> None:
     try:
-        get_supabase().storage.from_(BUCKET).remove([path])
+        r2_storage.delete_file(BUCKET, path)
     except Exception:
         pass  # best-effort cleanup — a dangling old object is harmless, unlike failing the request over it
 
@@ -126,8 +126,12 @@ def _upload_video_file(file: UploadFile) -> tuple[str, str, int]:
         storage_path = f"{uuid.uuid4().hex}.{ext}"
 
         with open(source_path, "rb") as f:
-            get_supabase().storage.from_(BUCKET).upload(
-                storage_path, f, {"content-type": mime, "cache-control": "31536000"}
+            r2_storage.upload_file(
+                logical_bucket=BUCKET,
+                storage_path=storage_path,
+                file=f,
+                content_type=mime,
+                cache_control="31536000",
             )
         return storage_path, mime, total
 
@@ -195,7 +199,7 @@ def delete_video(video_id: str) -> None:
 
 
 def resolve_url(row: dict[str, Any]) -> str:
-    return get_supabase().storage.from_(BUCKET).get_public_url(row["storage_path"])
+    return r2_storage.public_url(BUCKET, row["storage_path"])
 
 
 def to_schema(row: dict[str, Any]):

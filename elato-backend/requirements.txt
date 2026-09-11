@@ -19,3 +19,4 @@ av>=13.0
 # alone is enough; no `apt install ffmpeg` / system package / Dockerfile change
 # needed, which matters on Railway's native Python runtime (no root/apt access).
 imageio-ffmpeg>=0.5
+boto3>=1.35

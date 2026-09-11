@@ -2,7 +2,7 @@
 Admin-managed hero background videos (desktop + mobile slots).
 
 Validates -> transcodes *only if the source isn't already browser-delivery
-compatible* -> stores the result in Supabase Storage -> probes duration/
+compatible* -> stores the result in Cloudflare R2 -> probes duration/
 dimensions and extracts a poster frame via PyAV (which bundles its own
 decoder libraries, so no system ffmpeg install is required for that half).
 
@@ -50,9 +50,9 @@ from fastapi import UploadFile
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.upload_tolerance import video_budget
-from app.db import get_supabase
 from app.repositories import hero_background_repository
 from app.services import media_service
+from app.services import r2_storage
 from app.utils.perf import current_rss_kb, timed_step
 
 logger = logging.getLogger("elato.hero_video")
@@ -361,7 +361,7 @@ def _stream_upload_to_path(file: UploadFile, dest: Path, max_bytes: int) -> int:
 def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str) -> dict[str, Any]:
     """Synchronous body of `upload_hero_video` — everything here is either
     CPU-bound (PyAV probing, occasionally ffmpeg) or a blocking network call
-    (Supabase Storage), so `upload_hero_video` runs this whole thing via
+    (Cloudflare R2), so `upload_hero_video` runs this whole thing via
     `asyncio.to_thread` rather than awaiting it piecemeal on the event loop.
 
     Conditional transcode: per the production upload audit, re-encoding
@@ -459,13 +459,17 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
                 upload_path = source_path
 
             ext = "mp4"  # both branches land on MP4: transcode output always is, and only an MP4 source skips it
-            supabase = get_supabase()
             stem = uuid.uuid4().hex
             video_path = f"{slot}/{stem}.{ext}"
-            with _timed_step("upload_video_to_supabase", slot):
+
+            with _timed_step("upload_video_to_r2", slot):
                 with open(upload_path, "rb") as f:
-                    supabase.storage.from_(VIDEO_BUCKET).upload(
-                        video_path, f, {"content-type": mime, "cache-control": "31536000"}
+                    r2_storage.upload_file(
+                        logical_bucket=VIDEO_BUCKET,
+                        storage_path=video_path,
+                        file=f,
+                        content_type=mime,
+                        cache_control="31536000",
                     )
             file_size_bytes = upload_path.stat().st_size
 
@@ -473,12 +477,14 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
             poster_path = None
             if probe.poster_jpeg:
                 candidate_poster_path = f"hero-video-posters/{slot}/{stem}.jpg"
-                with _timed_step("upload_poster_to_supabase", slot):
+                with _timed_step("upload_poster_to_r2", slot):
                     try:
-                        supabase.storage.from_(POSTER_BUCKET).upload(
-                            candidate_poster_path,
-                            probe.poster_jpeg,
-                            {"content-type": "image/jpeg", "cache-control": "31536000"},
+                        r2_storage.upload_file(
+                            logical_bucket=POSTER_BUCKET,
+                            storage_path=candidate_poster_path,
+                            file=probe.poster_jpeg,
+                            content_type="image/jpeg",
+                            cache_control="31536000",
                         )
                         poster_bucket = POSTER_BUCKET
                         poster_path = candidate_poster_path
@@ -577,17 +583,24 @@ def delete_hero_video(slot: str) -> None:
 
 def _delete_storage_object(bucket: str, path: str) -> None:
     try:
-        get_supabase().storage.from_(bucket).remove([path])
+        r2_storage.delete_file(bucket, path)
     except Exception:
-        pass  # best-effort cleanup — a dangling old object is harmless, unlike failing the request over it
+        pass
 
 
 def resolve_urls(row: dict[str, Any]) -> tuple[str, str | None]:
-    supabase = get_supabase()
-    video_url = supabase.storage.from_(row["video_bucket"]).get_public_url(row["video_path"])
+    video_url = r2_storage.public_url(
+        row["video_bucket"],
+        row["video_path"],
+    )
+
     poster_url = None
     if row.get("poster_bucket") and row.get("poster_path"):
-        poster_url = supabase.storage.from_(row["poster_bucket"]).get_public_url(row["poster_path"])
+        poster_url = r2_storage.public_url(
+            row["poster_bucket"],
+            row["poster_path"],
+        )
+
     return video_url, poster_url
 
 

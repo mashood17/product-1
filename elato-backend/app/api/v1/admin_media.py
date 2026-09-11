@@ -4,7 +4,7 @@ from app.core.dependencies import CurrentAdmin, get_current_admin, require_role
 from app.repositories import media_repository
 from app.schemas.common import Page, PaginationParams
 from app.schemas.media import MediaOut, MediaUploadResponse, MediaVariant
-from app.services import media_service
+from app.services import media_service, r2_storage
 
 router = APIRouter(prefix="/admin/media", tags=["admin-media"])
 
@@ -40,7 +40,5 @@ def delete_media(media_id: str, admin: CurrentAdmin = Depends(require_role("owne
 
 
 def _to_media_out(row: dict) -> MediaOut:
-    from app.db import get_supabase
-
-    url = get_supabase().storage.from_(row["bucket"]).get_public_url(row["storage_path"])
+    url = r2_storage.public_url(row["bucket"], row["storage_path"])
     return MediaOut(**row, url=url)
