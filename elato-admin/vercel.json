@@ -19,7 +19,7 @@
         { "key": "Permissions-Policy", "value": "geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' blob: https://*.supabase.co; font-src 'self' data:; connect-src 'self' https://elatogroup-production.up.railway.app https://*.kuberns.cloud; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://pub-ceaa3b64f48f490c8d578c6bfd5ee4f8.r2.dev; media-src 'self' blob: https://*.supabase.co https://pub-ceaa3b64f48f490c8d578c6bfd5ee4f8.r2.dev; font-src 'self' data:; connect-src 'self' https://elatogroup-production.up.railway.app https://*.kuberns.cloud; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         }
       ]
     }
