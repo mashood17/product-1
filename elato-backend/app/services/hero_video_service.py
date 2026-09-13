@@ -469,7 +469,7 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
                         storage_path=video_path,
                         file=f,
                         content_type=mime,
-                        cache_control="31536000",
+                        cache_control="no-cache",
                     )
             file_size_bytes = upload_path.stat().st_size
 
@@ -484,7 +484,7 @@ def _process_and_upload_hero_video(file: UploadFile, slot: str, uploaded_by: str
                             storage_path=candidate_poster_path,
                             file=probe.poster_jpeg,
                             content_type="image/jpeg",
-                            cache_control="31536000",
+                            cache_control="no-cache",
                         )
                         poster_bucket = POSTER_BUCKET
                         poster_path = candidate_poster_path
@@ -589,10 +589,15 @@ def _delete_storage_object(bucket: str, path: str) -> None:
 
 
 def resolve_urls(row: dict[str, Any]) -> tuple[str, str | None]:
+    # Cache-busting version ensures browsers do not reuse previously
+    # cached/broken video responses or stale range-request responses.
+    cache_version = "20260913"
+
     video_url = r2_storage.public_url(
         row["video_bucket"],
         row["video_path"],
     )
+    video_url = f"{video_url}?v={cache_version}"
 
     poster_url = None
     if row.get("poster_bucket") and row.get("poster_path"):
@@ -600,6 +605,7 @@ def resolve_urls(row: dict[str, Any]) -> tuple[str, str | None]:
             row["poster_bucket"],
             row["poster_path"],
         )
+        poster_url = f"{poster_url}?v={cache_version}"
 
     return video_url, poster_url
 

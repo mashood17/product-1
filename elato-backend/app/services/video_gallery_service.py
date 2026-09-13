@@ -131,7 +131,7 @@ def _upload_video_file(file: UploadFile) -> tuple[str, str, int]:
                 storage_path=storage_path,
                 file=f,
                 content_type=mime,
-                cache_control="31536000",
+                cache_control="no-cache",
             )
         return storage_path, mime, total
 
@@ -199,7 +199,8 @@ def delete_video(video_id: str) -> None:
 
 
 def resolve_url(row: dict[str, Any]) -> str:
-    return r2_storage.public_url(BUCKET, row["storage_path"])
+    url = r2_storage.public_url(BUCKET, row["storage_path"])
+    return f"{url}?v=20260913"
 
 
 def to_schema(row: dict[str, Any]):
